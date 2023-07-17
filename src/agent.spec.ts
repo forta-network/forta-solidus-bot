@@ -1,4 +1,6 @@
 import {
+  BlockEvent,
+  HandleBlock,
   FindingType,
   FindingSeverity,
   Finding,
