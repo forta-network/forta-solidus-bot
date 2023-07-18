@@ -25,15 +25,20 @@
     "enable": "forta-agent enable",
     "keyfile": "forta-agent keyfile",
     "stake": "forta-agent stake",
-    "test": "jest"
+    "test": "jest --detectOpenHandles"
   },
   "dependencies": {
-    "forta-agent": "^0.1.33"
+    "forta-agent": "^0.1.33",
+    "forta-agent-tools": "^3.2.8",
+    "ws": "^8.13.0"
   },
   "devDependencies": {
     "@types/jest": "^27.0.1",
     "@types/nodemon": "^1.19.0",
+    "@types/ws": "^8.5.5",
     "jest": "^27.0.6",
+    "jest-websocket-mock": "^2.4.0",
+    "mock-socket": "^9.2.1",
     "nodemon": "^2.0.8",
     "ts-jest": "^27.0.3",
     "typescript": "^4.3.4"
