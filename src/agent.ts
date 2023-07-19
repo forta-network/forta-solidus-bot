@@ -1,36 +1,59 @@
 import {
+  Initialize,
+  setPrivateFindings,
   BlockEvent,
   HandleBlock,
-  Finding,
-  FindingType,
-  FindingSeverity,
-  Label,
-  EntityType
+  Finding
 } from "forta-agent";
-import WebSocket from 'ws';
+import { createFinding } from "./findings";
+import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from 'ws';
 
-// const ws: WebSocket = new WebSocket('ws://localhost:1234');
+// Use `123` URL for testing
+const wsUrl = "ws://localhost:1234";
+// Use below for PROD
+// const wsUrl = "";
+
+// const ws: WebSocket = new WebSocket(wsUrl);
 let rawRugPullData: any = [];
-let isTaskRunning = false;
+let isWebSocketConnected: boolean;
 
-async function runLongTask(ws: WebSocket) {
-  isTaskRunning = true;
+async function establishNewWebSocketClient(ws: WebSocket) {
+  ws.onopen = (open: any) => {
+    isWebSocketConnected = true;
+    console.log("WebSocket connection opened.");
+  };
 
-  ws.onmessage = (message: any) => {
-    const parsedData = JSON.parse(message["data"]);
+  ws.onmessage = (message: MessageEvent) => {
+    const parsedData = JSON.parse(message.data.toString());
     parsedData.result.forEach((result: any) => {
       rawRugPullData.push(result);
     });
   };
 
-  isTaskRunning = false;
+  ws.onerror = (error: ErrorEvent) => {
+    isWebSocketConnected = false;
+    console.log(`WebSocket connection errored out. Type: ${error.type}`);
+  };
+
+  ws.onclose = (event: CloseEvent) => {
+    isWebSocketConnected = false;
+    console.log(`WebSocket connection closed. Code: ${event.code}.`);
+  }
+
+  isWebSocketConnected = true;
 }
 
-export function provideHandleBlock(ws: WebSocket): HandleBlock {
+export function provideInitialize(ws: WebSocket): Initialize {
+  return async () => {
+    setPrivateFindings(true);
+    establishNewWebSocketClient(ws);
+  }
+};
+
+export function provideHandleBlock(): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
-    // make sure only one task is running at a time
-    if (!isTaskRunning) {
-      runLongTask(ws);
+    if (!isWebSocketConnected) {
+      establishNewWebSocketClient(new WebSocket(wsUrl));
     }
 
     const findings: Finding[] = [];
@@ -38,42 +61,7 @@ export function provideHandleBlock(ws: WebSocket): HandleBlock {
     const rugPullEntries: number = rawRugPullData.length;
     if(rugPullEntries > 0) {
       rawRugPullData.forEach((entry: any) => {
-        findings.push(
-          Finding.fromObject({
-            name: "Rug pull contract detected",
-            description: entry["exploits"][0]["name"],
-            alertId: "SOLIDUS-RUG-PULL",
-            severity: FindingSeverity.Critical,
-            type: FindingType.Scam,
-            metadata: {
-              chainId: entry["chain_id"],
-              deployerAddress: entry["deployer_addr"],
-              createdAddress: entry["address"],
-              creationTime: entry["created_at"],
-              tokenName: entry["name"],
-              tokenSymbol: entry["symbol"],
-              exploitName: entry["exploits"][0]["name"],
-              exploitType: entry["exploits"][0]["type"]
-            },
-            labels: [
-              Label.fromObject({
-                entity: entry["address"],
-                entityType: EntityType.Address,
-                label: "Rug pull contract",
-                confidence: 0.99,
-                remove: false,
-                createdAt: entry["created_at"]
-              }),
-              Label.fromObject({
-                entity: entry["deployer_addr"],
-                entityType: EntityType.Address,
-                label: "Rug pull contract deployer",
-                confidence: 0.99,
-                remove: false,
-              }),
-            ]
-          })
-        );
+        findings.push(createFinding(entry));
       });
 
       rawRugPullData.splice(0, rugPullEntries);
@@ -84,6 +72,8 @@ export function provideHandleBlock(ws: WebSocket): HandleBlock {
 };
 
 export default {
+  // initialize: provideInitialize(ws),
+  handleBlock: provideHandleBlock(),
+  provideInitialize,
   provideHandleBlock,
-  // handleBlock: provideHandleBlock(ws)
 };
