@@ -28,6 +28,7 @@
     "test": "jest --detectOpenHandles"
   },
   "dependencies": {
+    "axios": "^1.4.0",
     "forta-agent": "^0.1.33",
     "forta-agent-tools": "^3.2.8",
     "ws": "^8.13.0"

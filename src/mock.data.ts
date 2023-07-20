@@ -70,3 +70,10 @@ export const mockDataThreeResults: any = {
     "total": 3,
     "result": mockDataResults
 }
+
+export const mockFpList: any = {
+  "mockOne": {
+      "contractAddress": createAddress("0x10"),
+      "deployerAddress": createAddress("0x11")
+  }
+}
