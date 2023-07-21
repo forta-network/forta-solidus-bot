@@ -1,8 +1,8 @@
 {
-  "name": "forta-agent-starter",
+  "name": "solidus-rug-pull",
   "version": "0.0.1",
-  "description": "Forta Agent Typescript starter project",
-  "repository": "https://github.com/forta-network/forta-bot-sdk/tree/master/starter-project",
+  "description": "Bot that alerts of rug pull contracts indentified by Solidus Labs",
+  "repository": "https://github.com/forta-network/forta-solidus-bot",
   "chainIds": [
     1
   ],
@@ -31,16 +31,17 @@
   "dependencies": {
     "axios": "^1.4.0",
     "forta-agent": "^0.1.33",
-    "forta-agent-tools": "^3.2.8",
     "ws": "^8.13.0"
   },
   "devDependencies": {
     "@types/jest": "^27.0.1",
+    "@types/jest-when": "^3.5.2",
     "@types/nodemon": "^1.19.0",
     "@types/ws": "^8.5.5",
     "jest": "^27.0.6",
     "jest-websocket-mock": "^2.4.0",
     "jest-when": "^3.5.2",
+    "forta-agent-tools": "^3.2.8",
     "mock-socket": "^9.2.1",
     "nodemon": "^2.0.8",
     "prettier": "^3.0.0",

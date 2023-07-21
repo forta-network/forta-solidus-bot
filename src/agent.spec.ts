@@ -1,11 +1,11 @@
 import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
-import { provideInitialize, provideHandleBlock } from "./agent";
-import { RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
-import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
 import { TestBlockEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
 import WS from "jest-websocket-mock";
 import WebSocket from "ws";
+import { provideInitialize, provideHandleBlock } from "./agent";
+import { RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
+import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
 
 function createRugPullFinding(rugPullResult: RugPullResult): Finding {
   return Finding.fromObject({
@@ -153,7 +153,7 @@ function createDeployerFalsePositiveFinding(
 describe("Solidus Rug Pull Bot Test Suite", () => {
   let mockServer: WS;
   let mockClient: WebSocket;
-  const mockFpFetcer = jest.fn();
+  const mockFpFetcher = jest.fn();
   const mockLabelFetcher = jest.fn();
   let handleBlock: HandleBlock;
   const mockBlockEvent = new TestBlockEvent().setNumber(10);
@@ -163,14 +163,14 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockClient = new WebSocket("ws://localhost:1234");
     await mockServer.connected;
 
-    when(mockFpFetcer).calledWith(expect.anything()).mockReturnValue(mockFpDb);
+    mockFpFetcher.mockReturnValue(mockFpDb);
 
     const initialize: Initialize = provideInitialize(mockClient);
     await initialize();
 
-    handleBlock = provideHandleBlock("testFpURL", mockFpFetcer, mockLabelFetcher);
+    handleBlock = provideHandleBlock("testFpURL", mockFpFetcher, mockLabelFetcher);
     const findings = await handleBlock(mockBlockEvent);
-    // Not alerts since no data sent from server
+    // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
   });
 
@@ -227,7 +227,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     expect(findings).toStrictEqual([]);
     mockServer.close();
     // Code `1000` since connection was closed "gracefully"
-    expect(spy).toHaveBeenCalledWith("WebSocket connection closed. Code: 1000.");
+    expect(spy).toHaveBeenCalledWith("WebSocket connection closed. Code: 1000. Reason (could be empty): ");
 
     // Mocking server re-initialization
     // and re-establishing connection
@@ -255,7 +255,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     mockServer.error();
-    expect(spy).toHaveBeenCalledWith("WebSocket connection errored out. Type: error");
+    expect(spy).toHaveBeenCalledWith("WebSocket connection errored out. Type: error.");
   });
 
   it("creates an alert for an address then creates a false positive alert for that address that was a false positive", async () => {
@@ -334,13 +334,11 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       ),
     ]);
 
-    /*
     mockBlockEvent.setNumber(600);
     findings = await handleBlock(mockBlockEvent);
     // FP Finding should not be created for
     // previous fetched Label
     expect(findings).toStrictEqual([]);
-    */
   });
 
   it("creates alerts up to the 50 alert limit then creates the rest in the subsequent block", async () => {
@@ -348,7 +346,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockServer.send(mockDataSixtyFiveResults);
 
     const firstFiftyRugPullFindings: Finding[] = [];
-    mockDataSixtyFiveResults["result"].slice(0,50).forEach((result) => {
+    mockDataSixtyFiveResults["result"].slice(0, 50).forEach((result) => {
       firstFiftyRugPullFindings.push(createRugPullFinding(result));
     });
 
