@@ -1,79 +1,82 @@
+import { Label, EntityType } from "forta-agent";
+import { RugPullResult, RugPullPayload, FalsePositiveDatabase } from "./types";
 import { createAddress } from "forta-agent-tools";
 
-const mockDataResults: any[] = [
-    {
-      "chain_id": "56",
-      "address": createAddress("0x10"),
-      "deployer_addr": createAddress("0x11"),
-      "name": "mockOne",
-      "symbol": "M1",
-      "created_at": "2023-07-17T20:10:00.000Z",
-      "exploits": [
-        {
-          "id": 11,
-          "name": "Exploit name 01",
-          "types": "Exploit type 01"
-        }
-      ]
-    },
-    {
-      "chain_id": "56",
-      "address": createAddress("0x20"),
-      "deployer_addr": createAddress("0x21"),
-      "name": "mockTwo",
-      "symbol": "M2",
-      "created_at": "2023-07-17T20:20:00.000Z",
-      "exploits": [
-        {
-          "id": 22,
-          "name": "Exploit name 02",
-          "types": "Exploit type 02"
-        }
-      ]
-    },
-    {
-      "chain_id": "56",
-      "address": createAddress("0x30"),
-      "deployer_addr": createAddress("0x31"),
-      "name": "mockThree",
-      "symbol": "M3",
-      "created_at": "2023-07-17T20:30:00.000Z",
-      "exploits": [
-        {
-          "id": 33,
-          "name": "Exploit name 02",
-          "types": "Exploit type 02"
-        }
-      ]
-    }
-];
-  
-export const mockDataOneResult: any = {
-    "message": "OK",
-    "total": 1,
-    "result": [
-        mockDataResults[0]
-    ]
-}
-  
-export const mockDataTwoResults: any = {
-    "message": "OK",
-    "total": 2,
-    "result": [
-        mockDataResults[1],
-        mockDataResults[2],
-    ]
-}
-  
-export const mockDataThreeResults: any = {
-    "message": "OK",
-    "total": 3,
-    "result": mockDataResults
+function createSingleRugPullResult(identifier: number): RugPullResult {
+  const rugPullResult: RugPullResult = {
+    chain_id: "56",
+    address: createAddress(`0x${identifier}0`),
+    deployer_addr: createAddress(`0x${identifier}${identifier}`),
+    name: `mock${identifier}`,
+    symbol: `M${identifier}`,
+    created_at: `2023-07-17T20:10:00.0${identifier}Z`,
+    exploits: [
+      {
+        id: identifier,
+        name: `Exploit name 0${identifier}`,
+        types: `Exploit type 0${identifier}`,
+      },
+    ],
+  };
+
+  return rugPullResult;
 }
 
-export const mockFpList: any = {
-  "mockOne": {
-      "contractAddress": createAddress("0x10"),
-      "deployerAddress": createAddress("0x11")
+export function createMockRugPullResults(amount: number): RugPullPayload {
+  const rugPullPayload: RugPullPayload = {
+    message: "OK",
+    total: amount,
+    result: [],
+  };
+
+  for (let i = 1; i <= amount; i++) {
+    rugPullPayload["result"].push(createSingleRugPullResult(i));
   }
+
+  return rugPullPayload;
 }
+
+export function createFetchedLabels(
+  chainId: string,
+  contractAddress: string,
+  deployerAddress: string,
+  creationTime: string,
+  contractName: string,
+  tokenSymbol: string,
+  exploitId: string,
+  exploitName: string,
+  exploitType: string,
+  label: string
+): Label[] {
+  const labels: Label[] = [
+    {
+      entity: contractAddress,
+      entityType: EntityType.Address,
+      label: label,
+      confidence: 0.99,
+      remove: false,
+      metadata: {
+        chainId,
+        contractAddress,
+        deployerAddress,
+        creationTime,
+        contractName,
+        tokenSymbol,
+        exploitId,
+        exploitName,
+        exploitType,
+      },
+    },
+  ];
+
+  return labels;
+}
+
+export const mockFpDb: FalsePositiveDatabase = {
+  mockOne: {
+    contractName: "mockOne",
+    contractAddress: createAddress("0x10"),
+    deployerAddress: createAddress("0x11"),
+    comment: "Not Rug Pull",
+  },
+};

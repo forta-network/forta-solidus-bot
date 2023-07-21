@@ -1,0 +1,10 @@
+/*
+{
+    "exampleContractName": {
+        "contractName": "ExampleContractName",
+        "contractAddress": "0xabc...xyz",
+        "deployerAddress": "0xabc...xyz",
+        "comment": "For demo purposes. Replace with actual false positive"
+    }
+}
+*/

@@ -25,7 +25,8 @@
     "enable": "forta-agent enable",
     "keyfile": "forta-agent keyfile",
     "stake": "forta-agent stake",
-    "test": "jest --detectOpenHandles"
+    "test": "jest --detectOpenHandles",
+    "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
     "axios": "^1.4.0",
@@ -39,8 +40,10 @@
     "@types/ws": "^8.5.5",
     "jest": "^27.0.6",
     "jest-websocket-mock": "^2.4.0",
+    "jest-when": "^3.5.2",
     "mock-socket": "^9.2.1",
     "nodemon": "^2.0.8",
+    "prettier": "^3.0.0",
     "ts-jest": "^27.0.3",
     "typescript": "^4.3.4"
   }

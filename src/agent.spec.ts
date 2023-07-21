@@ -1,28 +1,160 @@
-import {
-  Initialize,
-  HandleBlock,
-  Finding,
-  FindingSeverity,
-  FindingType,
-  Label,
-  EntityType
-} from "forta-agent";
+import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
 import { provideInitialize, provideHandleBlock } from "./agent";
-import {
-  mockDataOneResult,
-  mockDataTwoResults,
-  mockDataThreeResults,
-  mockFpList
-} from "./mock.data";
+import { RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
+import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
 import { TestBlockEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
 import WS from "jest-websocket-mock";
-import WebSocket from 'ws';
+import WebSocket from "ws";
+
+function createRugPullFinding(rugPullResult: RugPullResult): Finding {
+  return Finding.fromObject({
+    name: `Rug pull contract detected: ${rugPullResult["name"]}`,
+    description: rugPullResult["exploits"][0]["name"],
+    alertId: "SOLIDUS-RUG-PULL",
+    severity: FindingSeverity.Critical,
+    type: FindingType.Scam,
+    metadata: {
+      chainId: rugPullResult["chain_id"],
+      deployerAddress: rugPullResult["deployer_addr"],
+      createdAddress: rugPullResult["address"],
+      creationTime: rugPullResult["created_at"],
+      contractName: rugPullResult["name"],
+      tokenSymbol: rugPullResult["symbol"],
+      exploitId: rugPullResult["exploits"][0]["id"].toString(),
+      exploitName: rugPullResult["exploits"][0]["name"],
+      exploitType: rugPullResult["exploits"][0]["types"],
+    },
+    labels: [
+      Label.fromObject({
+        entity: rugPullResult["address"],
+        entityType: EntityType.Address,
+        label: "Rug pull contract",
+        confidence: 0.99,
+        remove: false,
+        metadata: {
+          chainId: rugPullResult["chain_id"],
+          contractAddress: rugPullResult["address"],
+          deployerAddress: rugPullResult["deployer_addr"],
+          creationTime: rugPullResult["created_at"],
+          contractName: rugPullResult["name"],
+          tokenSymbol: rugPullResult["symbol"],
+          exploitId: rugPullResult["exploits"][0]["id"].toString(),
+          exploitName: rugPullResult["exploits"][0]["name"],
+          exploitType: rugPullResult["exploits"][0]["types"],
+        },
+      }),
+      Label.fromObject({
+        entity: rugPullResult["deployer_addr"],
+        entityType: EntityType.Address,
+        label: "Rug pull contract deployer",
+        confidence: 0.99,
+        remove: false,
+        metadata: {
+          chainId: rugPullResult["chain_id"],
+          contractAddress: rugPullResult["address"],
+          deployerAddress: rugPullResult["deployer_addr"],
+          creationTime: rugPullResult["created_at"],
+          contractName: rugPullResult["name"],
+          tokenSymbol: rugPullResult["symbol"],
+          exploitId: rugPullResult["exploits"][0]["id"].toString(),
+          exploitName: rugPullResult["exploits"][0]["name"],
+          exploitType: rugPullResult["exploits"][0]["types"],
+        },
+      }),
+    ],
+  });
+}
+
+function createContractFalsePositiveFinding(
+  falsePositiveEntry: FalsePositiveInfo,
+  chainId: string,
+  contractAddress: string,
+  deployerAddress: string,
+  creationTime: string,
+  contractName: string,
+  tokenSymbol: string,
+  exploitId: string,
+  exploitName: string,
+  exploitType: string
+): Finding {
+  return Finding.fromObject({
+    name: `False positive rug pull contract previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
+    description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]} a rug pull`,
+    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
+    severity: FindingSeverity.Info,
+    type: FindingType.Info,
+    metadata: {},
+    labels: [
+      Label.fromObject({
+        entity: falsePositiveEntry["contractAddress"],
+        entityType: EntityType.Address,
+        label: "Rug pull contract",
+        confidence: 0.99,
+        remove: true,
+        metadata: {
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId,
+          exploitName,
+          exploitType,
+        },
+      }),
+    ],
+  });
+}
+
+function createDeployerFalsePositiveFinding(
+  falsePositiveEntry: FalsePositiveInfo,
+  chainId: string,
+  contractAddress: string,
+  deployerAddress: string,
+  creationTime: string,
+  contractName: string,
+  tokenSymbol: string,
+  exploitId: string,
+  exploitName: string,
+  exploitType: string
+): Finding {
+  return Finding.fromObject({
+    name: "False positive rug pull contract deployer previously incorrectly labeled",
+    description: `Rug pull detector previously labeled ${falsePositiveEntry["deployerAddress"]} a rug pull deployer`,
+    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
+    severity: FindingSeverity.Info,
+    type: FindingType.Info,
+    metadata: {},
+    labels: [
+      Label.fromObject({
+        entity: falsePositiveEntry["deployerAddress"],
+        entityType: EntityType.Address,
+        label: "Rug pull contract deployer",
+        confidence: 0.99,
+        remove: true,
+        metadata: {
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId,
+          exploitName,
+          exploitType,
+        },
+      }),
+    ],
+  });
+}
 
 describe("Solidus Rug Pull Bot Test Suite", () => {
   let mockServer: WS;
   let mockClient: WebSocket;
   const mockFpFetcer = jest.fn();
+  const mockLabelFetcher = jest.fn();
   let handleBlock: HandleBlock;
   const mockBlockEvent = new TestBlockEvent().setNumber(10);
 
@@ -31,14 +163,12 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockClient = new WebSocket("ws://localhost:1234");
     await mockServer.connected;
 
-    when(mockFpFetcer)
-      .calledWith(expect.anything())
-      .mockReturnValue(mockFpList);
+    when(mockFpFetcer).calledWith(expect.anything()).mockReturnValue(mockFpDb);
 
     const initialize: Initialize = provideInitialize(mockClient);
     await initialize();
 
-    handleBlock = provideHandleBlock("testFpURL", mockFpFetcer);
+    handleBlock = provideHandleBlock("testFpURL", mockFpFetcer, mockLabelFetcher);
     const findings = await handleBlock(mockBlockEvent);
     // Not alerts since no data sent from server
     expect(findings).toStrictEqual([]);
@@ -48,110 +178,15 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     WS.clean();
   });
 
-  it.skip("creates alerts when WebSocket server sends data", async () => {
+  it("creates alerts when WebSocket server sends data", async () => {
+    const mockDataThreeResults: RugPullPayload = createMockRugPullResults(3);
     mockServer.send(mockDataThreeResults);
 
     let findings = await handleBlock(mockBlockEvent);
     expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][0]["name"]}`,
-        description: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][0]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][0]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][0]["address"],
-          creationTime: mockDataThreeResults["result"][0]["created_at"],
-          contractName: mockDataThreeResults["result"][0]["name"],
-          tokenSymbol: mockDataThreeResults["result"][0]["symbol"],
-          exploitName: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][0]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][1]["name"]}`,
-        description: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][1]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][1]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][1]["address"],
-          creationTime: mockDataThreeResults["result"][1]["created_at"],
-          contractName: mockDataThreeResults["result"][1]["name"],
-          tokenSymbol: mockDataThreeResults["result"][1]["symbol"],
-          exploitName: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][1]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][2]["name"]}`,
-        description: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][2]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][2]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][2]["address"],
-          creationTime: mockDataThreeResults["result"][2]["created_at"],
-          contractName: mockDataThreeResults["result"][2]["name"],
-          tokenSymbol: mockDataThreeResults["result"][2]["symbol"],
-          exploitName: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][2]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
+      createRugPullFinding(mockDataThreeResults["result"][0]),
+      createRugPullFinding(mockDataThreeResults["result"][1]),
+      createRugPullFinding(mockDataThreeResults["result"][2]),
     ]);
 
     findings = await handleBlock(mockBlockEvent);
@@ -159,111 +194,18 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     expect(findings).toStrictEqual([]);
   });
 
-  it.skip("creates one batch of alerts from different payloads delivered in between blocks", async () => {
+  it("creates one batch of alerts from different payloads delivered in between blocks", async () => {
+    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
+    const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
+
     mockServer.send(mockDataOneResult);
     mockServer.send(mockDataTwoResults);
 
     let findings = await handleBlock(mockBlockEvent);
     expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][0]["name"]}`,
-        description: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][0]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][0]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][0]["address"],
-          creationTime: mockDataThreeResults["result"][0]["created_at"],
-          contractName: mockDataThreeResults["result"][0]["name"],
-          tokenSymbol: mockDataThreeResults["result"][0]["symbol"],
-          exploitName: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][0]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][1]["name"]}`,
-        description: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][1]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][1]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][1]["address"],
-          creationTime: mockDataThreeResults["result"][1]["created_at"],
-          contractName: mockDataThreeResults["result"][1]["name"],
-          tokenSymbol: mockDataThreeResults["result"][1]["symbol"],
-          exploitName: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][1]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][2]["name"]}`,
-        description: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][2]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][2]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][2]["address"],
-          creationTime: mockDataThreeResults["result"][2]["created_at"],
-          contractName: mockDataThreeResults["result"][2]["name"],
-          tokenSymbol: mockDataThreeResults["result"][2]["symbol"],
-          exploitName: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][2]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
+      createRugPullFinding(mockDataOneResult["result"][0]),
+      createRugPullFinding(mockDataTwoResults["result"][0]),
+      createRugPullFinding(mockDataTwoResults["result"][1]),
     ]);
 
     findings = await handleBlock(mockBlockEvent);
@@ -271,46 +213,14 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     expect(findings).toStrictEqual([]);
   });
 
-  it.skip("creates alerts, connection closes, connection re-establishes, and bot creates more alerts", async () => {
+  it("creates alerts, connection closes, connection re-establishes, and bot creates more alerts", async () => {
     const spy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
+    const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
 
     mockServer.send(mockDataOneResult);
     let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][0]["name"]}`,
-        description: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][0]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][0]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][0]["address"],
-          creationTime: mockDataThreeResults["result"][0]["created_at"],
-          contractName: mockDataThreeResults["result"][0]["name"],
-          tokenSymbol: mockDataThreeResults["result"][0]["symbol"],
-          exploitName: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][0]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      })
-    ]);
+    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     findings = await handleBlock(mockBlockEvent);
     // No findings, since entries were cleared
@@ -331,163 +241,61 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     findings = await handleBlock(mockBlockEvent);
 
     expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][1]["name"]}`,
-        description: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][1]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][1]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][1]["address"],
-          creationTime: mockDataThreeResults["result"][1]["created_at"],
-          contractName: mockDataThreeResults["result"][1]["name"],
-          tokenSymbol: mockDataThreeResults["result"][1]["symbol"],
-          exploitName: mockDataThreeResults["result"][1]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][1]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][1]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][2]["name"]}`,
-        description: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][2]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][2]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][2]["address"],
-          creationTime: mockDataThreeResults["result"][2]["created_at"],
-          contractName: mockDataThreeResults["result"][2]["name"],
-          tokenSymbol: mockDataThreeResults["result"][2]["symbol"],
-          exploitName: mockDataThreeResults["result"][2]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][2]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][2]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      }),
+      createRugPullFinding(mockDataTwoResults["result"][0]),
+      createRugPullFinding(mockDataTwoResults["result"][1]),
     ]);
   });
 
-  it.skip("responds with a PONG if server sends a PING message to keep the connection alive", async () => {
-    //
-  });
-
-  it.skip("handles an error when received", async () => {
+  it("handles an error when received", async () => {
     const spy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
 
     mockServer.send(mockDataOneResult);
     let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][0]["name"]}`,
-        description: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][0]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][0]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][0]["address"],
-          creationTime: mockDataThreeResults["result"][0]["created_at"],
-          contractName: mockDataThreeResults["result"][0]["name"],
-          tokenSymbol: mockDataThreeResults["result"][0]["symbol"],
-          exploitName: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][0]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      })
-    ]);
+    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     mockServer.error();
     expect(spy).toHaveBeenCalledWith("WebSocket connection errored out. Type: error");
   });
 
   it("creates an alert for an address then creates a false positive alert for that address that was a false positive", async () => {
+    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
+    when(mockLabelFetcher)
+      .calledWith(mockDataOneResult["result"][0]["address"], "Rug pull contract")
+      .mockReturnValue(
+        createFetchedLabels(
+          mockDataOneResult["result"][0]["chain_id"],
+          mockDataOneResult["result"][0]["address"],
+          mockDataOneResult["result"][0]["deployer_addr"],
+          mockDataOneResult["result"][0]["created_at"],
+          mockDataOneResult["result"][0]["name"],
+          mockDataOneResult["result"][0]["symbol"],
+          mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
+          mockDataOneResult["result"][0]["exploits"][0]["name"],
+          mockDataOneResult["result"][0]["exploits"][0]["types"],
+          "Rug pull contract"
+        )
+      )
+      .calledWith(mockDataOneResult["result"][0]["deployer_addr"], "Rug pull contract deployer")
+      .mockReturnValue(
+        createFetchedLabels(
+          mockDataOneResult["result"][0]["chain_id"],
+          mockDataOneResult["result"][0]["address"],
+          mockDataOneResult["result"][0]["deployer_addr"],
+          mockDataOneResult["result"][0]["created_at"],
+          mockDataOneResult["result"][0]["name"],
+          mockDataOneResult["result"][0]["symbol"],
+          mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
+          mockDataOneResult["result"][0]["exploits"][0]["name"],
+          mockDataOneResult["result"][0]["exploits"][0]["types"],
+          "Rug pull contract deployer"
+        )
+      );
+
     mockServer.send(mockDataOneResult);
 
     let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `Rug pull contract detected: ${mockDataThreeResults["result"][0]["name"]}`,
-        description: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-        alertId: "SOLIDUS-RUG-PULL",
-        severity: FindingSeverity.Critical,
-        type: FindingType.Scam,
-        metadata: {
-          chainId: mockDataThreeResults["result"][0]["chain_id"],
-          deployerAddress: mockDataThreeResults["result"][0]["deployer_addr"],
-          createdAddress: mockDataThreeResults["result"][0]["address"],
-          creationTime: mockDataThreeResults["result"][0]["created_at"],
-          contractName: mockDataThreeResults["result"][0]["name"],
-          tokenSymbol: mockDataThreeResults["result"][0]["symbol"],
-          exploitName: mockDataThreeResults["result"][0]["exploits"][0]["name"],
-          exploitType: mockDataThreeResults["result"][0]["exploits"][0]["type"]
-        },
-        labels: [
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["address"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: false
-          }),
-          Label.fromObject({
-            entity: mockDataThreeResults["result"][0]["deployer_addr"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: false
-          }),
-        ]
-      })
-    ]);
+    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     findings = await handleBlock(mockBlockEvent);
     // No findings, since entries were cleared
@@ -496,35 +304,66 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockBlockEvent.setNumber(300);
     findings = await handleBlock(mockBlockEvent);
 
-    const mockFpArray: any = Object.entries(mockFpList);
+    console.log(`findings in test: ${JSON.stringify(findings)}`);
+
+    const mockFpValues: FalsePositiveInfo[] = Object.values(mockFpDb);
     expect(findings).toStrictEqual([
-      Finding.fromObject({
-        name: `False positive rug pull contract previously incorrectly labeled: ${mockFpArray[0][0]}`,
-        description: `Rug pull detector previously labeled ${mockFpArray[0][0]} contract at ${mockFpArray[0][1]["contractAddress"]} a rug pull`,
-        alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
-        severity: FindingSeverity.Info,
-        type: FindingType.Info,
-        metadata: {},
-        labels: [
-          Label.fromObject({
-            entity: mockFpArray[0][1]["contractAddress"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract",
-            confidence: 0.99,
-            remove: true
-          }),
-          Label.fromObject({
-            entity: mockFpArray[0][1]["deployerAddress"],
-            entityType: EntityType.Address,
-            label: "Rug pull contract deployer",
-            confidence: 0.99,
-            remove: true
-          }),
-        ]
-      })
+      createContractFalsePositiveFinding(
+        mockFpValues[0],
+        mockDataOneResult["result"][0]["chain_id"],
+        mockDataOneResult["result"][0]["address"],
+        mockDataOneResult["result"][0]["deployer_addr"],
+        mockDataOneResult["result"][0]["created_at"],
+        mockDataOneResult["result"][0]["name"],
+        mockDataOneResult["result"][0]["symbol"],
+        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
+        mockDataOneResult["result"][0]["exploits"][0]["name"],
+        mockDataOneResult["result"][0]["exploits"][0]["types"]
+      ),
+      createDeployerFalsePositiveFinding(
+        mockFpValues[0],
+        mockDataOneResult["result"][0]["chain_id"],
+        mockDataOneResult["result"][0]["address"],
+        mockDataOneResult["result"][0]["deployer_addr"],
+        mockDataOneResult["result"][0]["created_at"],
+        mockDataOneResult["result"][0]["name"],
+        mockDataOneResult["result"][0]["symbol"],
+        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
+        mockDataOneResult["result"][0]["exploits"][0]["name"],
+        mockDataOneResult["result"][0]["exploits"][0]["types"]
+      ),
     ]);
-    
+
+    /*
     mockBlockEvent.setNumber(600);
+    findings = await handleBlock(mockBlockEvent);
+    // FP Finding should not be created for
+    // previous fetched Label
+    expect(findings).toStrictEqual([]);
+    */
+  });
+
+  it("creates alerts up to the 50 alert limit then creates the rest in the subsequent block", async () => {
+    const mockDataSixtyFiveResults: RugPullPayload = createMockRugPullResults(65);
+    mockServer.send(mockDataSixtyFiveResults);
+
+    const firstFiftyRugPullFindings: Finding[] = [];
+    mockDataSixtyFiveResults["result"].slice(0,50).forEach((result) => {
+      firstFiftyRugPullFindings.push(createRugPullFinding(result));
+    });
+
+    let findings = await handleBlock(mockBlockEvent);
+    expect(findings).toStrictEqual(firstFiftyRugPullFindings);
+
+    const remainingFifteenRugPullFindings: Finding[] = [];
+    mockDataSixtyFiveResults["result"].slice(50).forEach((result) => {
+      remainingFifteenRugPullFindings.push(createRugPullFinding(result));
+    });
+
+    // Bot saved the "overflowing" 15 rug pull results
+    findings = await handleBlock(mockBlockEvent);
+    expect(findings).toStrictEqual(remainingFifteenRugPullFindings);
+
     findings = await handleBlock(mockBlockEvent);
     expect(findings).toStrictEqual([]);
   });

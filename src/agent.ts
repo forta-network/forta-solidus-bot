@@ -3,36 +3,67 @@ import {
   setPrivateFindings,
   BlockEvent,
   HandleBlock,
-  Finding
+  Finding,
+  getLabels,
+  LabelsResponse,
+  Label,
+  getBotId,
 } from "forta-agent";
+import { RugPullResult, RugPullPayload, FalsePositiveInfo, FalsePositiveDatabase } from "./types";
 import {
-  createFinding,
-  createFalsePositiveFinding
+  createRugPullFinding,
+  createContractFalsePositiveFinding,
+  createDeployerFalsePositiveFinding,
 } from "./findings";
-import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from 'ws';
+import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
 import axios from "axios";
 
-// Use `123` URL for testing
-const wsUrl = "ws://localhost:1234";
-// Use below for PROD
+// `123` URL for testing
+const webSocketUrl = "ws://localhost:1234";
+// PROD URL
 // const wsUrl = "";
-const fpUrl = "";
+const falsePositiveUrl = "";
+let ownBotId: string;
 
 // const ws: WebSocket = new WebSocket(wsUrl);
-let rawRugPullData: any = [];
+const unalertedRugPullResults: RugPullResult[] = [];
+const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
-let alertedFalsePositives: any = [];
+
+async function fetchLabels(entityAddress: string, entityLabel: string): Promise<Label[]> {
+  const labels: Label[] = [];
+  let hasNext = true;
+  let startingCursor = undefined;
+
+  while (hasNext) {
+    const results: LabelsResponse = await getLabels({
+      entities: [entityAddress],
+      labels: [entityLabel],
+      sourceIds: [ownBotId],
+      entityType: "Address",
+    });
+
+    hasNext = results.pageInfo.hasNextPage;
+    startingCursor = results.pageInfo.endCursor;
+
+    results.labels.forEach((label: Label) => {
+      labels.push(label);
+    });
+  }
+
+  return labels;
+}
 
 async function establishNewWebSocketClient(ws: WebSocket) {
-  ws.onopen = (open: any) => {
+  ws.onopen = () => {
     isWebSocketConnected = true;
     console.log("WebSocket connection opened.");
   };
 
   ws.onmessage = (message: MessageEvent) => {
-    const parsedData = JSON.parse(message.data.toString());
-    parsedData.result.forEach((result: any) => {
-      rawRugPullData.push(result);
+    const parsedData: RugPullPayload = JSON.parse(message.data.toString());
+    parsedData.result.forEach((result: RugPullResult) => {
+      unalertedRugPullResults.push(result);
     });
   };
 
@@ -44,57 +75,98 @@ async function establishNewWebSocketClient(ws: WebSocket) {
   ws.onclose = (event: CloseEvent) => {
     isWebSocketConnected = false;
     console.log(`WebSocket connection closed. Code: ${event.code}.`);
-  }
+  };
 
   isWebSocketConnected = true;
 }
 
-async function getFpList(url: string) {
-  return (await axios.get(url)).data;
+async function fetchFalsePositiveList(falsePositiveUrl: string): Promise<FalsePositiveDatabase> {
+  return (await axios.get(falsePositiveUrl)).data;
 }
 
 export function provideInitialize(ws: WebSocket): Initialize {
   return async () => {
     setPrivateFindings(true);
     establishNewWebSocketClient(ws);
-  }
-};
+    ownBotId = getBotId();
+  };
+}
 
-export function provideHandleBlock(fpUrl: string, fpFetcher: any): HandleBlock {
+export function provideHandleBlock(
+  falsePositiveUrl: string,
+  falsePositiveFetcher: any,
+  labelFetcher: any
+): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
-      establishNewWebSocketClient(new WebSocket(wsUrl));
+      establishNewWebSocketClient(new WebSocket(webSocketUrl));
     }
 
     const findings: Finding[] = [];
 
-    if(blockEvent.blockNumber % 300 == 0) {
-      const fpList = await fpFetcher(fpUrl);
+    if (blockEvent.blockNumber % 300 == 0) {
+      const falsePositiveDb: FalsePositiveDatabase = await falsePositiveFetcher(falsePositiveUrl);
 
-      Object.entries(fpList).forEach((fp) => {
-        if(!alertedFalsePositives.includes(fp[0])) {
-          findings.push(createFalsePositiveFinding(fp));
-          alertedFalsePositives.push(fp[0]);
+      Object.values(falsePositiveDb).forEach(async (fpEntry: FalsePositiveInfo) => {
+        if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
+          await labelFetcher(fpEntry["contractAddress"], "Rug pull contract").forEach((label: Label) => {
+            findings.push(
+              createContractFalsePositiveFinding(
+                fpEntry,
+                label.metadata.chainId,
+                label.metadata.contractAddress,
+                label.metadata.deployerAddress,
+                label.metadata.creationTime,
+                label.metadata.contractName,
+                label.metadata.tokenSymbol,
+                label.metadata.exploitId,
+                label.metadata.exploitName,
+                label.metadata.exploitType
+              )
+            );
+          });
+          await labelFetcher(fpEntry["deployerAddress"], "Rug pull contract deployer").forEach((label: Label) => {
+            findings.push(
+              createDeployerFalsePositiveFinding(
+                fpEntry,
+                label.metadata.chainId,
+                label.metadata.contractAddress,
+                label.metadata.deployerAddress,
+                label.metadata.creationTime,
+                label.metadata.contractName,
+                label.metadata.tokenSymbol,
+                label.metadata.exploitId,
+                label.metadata.exploitName,
+                label.metadata.exploitType
+              )
+            );
+          });
+          alertedFalsePositives.push(fpEntry["contractName"]);
         }
       });
     }
 
-    const rugPullEntries: number = rawRugPullData.length;
-    if(rugPullEntries > 0) {
-      rawRugPullData.forEach((entry: any) => {
-        findings.push(createFinding(entry));
+    const rugPullEntriesAmount: number = unalertedRugPullResults.length;
+    // Check to not exceed 50 alert finding
+    if (rugPullEntriesAmount > 50) {
+      for(let i = 0; i < 50; i++) {
+        findings.push(createRugPullFinding(unalertedRugPullResults[i]));
+      }
+      unalertedRugPullResults.splice(0, 50);
+    } else if (rugPullEntriesAmount > 0 && rugPullEntriesAmount < 50) {
+      unalertedRugPullResults.forEach((result: RugPullResult) => {
+        findings.push(createRugPullFinding(result));
       });
-
-      rawRugPullData.splice(0, rugPullEntries);
+      unalertedRugPullResults.splice(0, rugPullEntriesAmount);
     }
 
     return findings;
-  }
-};
+  };
+}
 
 export default {
   // initialize: provideInitialize(ws),
-  // handleBlock: provideHandleBlock(fpUrl, getFpList),
+  // handleBlock: provideHandleBlock(falsePositiveUrl, fetchFalsePositiveList, fetchLabels),
   provideInitialize,
   provideHandleBlock,
 };
