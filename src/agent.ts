@@ -80,7 +80,7 @@ function establishNewWebSocketClient(ws: WebSocket) {
 
 async function fetchFalsePositiveList(falsePositiveDbUrl: string): Promise<FalsePositiveDatabase> {
   const retryCount = 3;
-  let falsePositiveDb;
+  let falsePositiveDb = {};
 
   for (let i = 0; i <= retryCount; i++) {
     try {
