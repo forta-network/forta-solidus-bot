@@ -84,7 +84,7 @@ export function createContractFalsePositiveFinding(
   return Finding.fromObject({
     name: `False positive rug pull contract previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
     description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]} a rug pull`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
+    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-CONTRACT",
     severity: FindingSeverity.Info,
     type: FindingType.Info,
     metadata: {},
@@ -126,7 +126,7 @@ export function createDeployerFalsePositiveFinding(
   return Finding.fromObject({
     name: "False positive rug pull contract deployer previously incorrectly labeled",
     description: `Rug pull detector previously labeled ${falsePositiveEntry["deployerAddress"]} a rug pull deployer`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
+    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-DEPLOYER",
     severity: FindingSeverity.Info,
     type: FindingType.Info,
     metadata: {},

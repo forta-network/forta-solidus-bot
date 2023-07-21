@@ -1,7 +1,7 @@
 {
-  "name": "solidus-rug-pull",
+  "name": "token-sniffer-rug-pull-detector",
   "version": "0.0.1",
-  "description": "Bot that alerts of rug pull contracts indentified by Solidus Labs",
+  "description": "Bot that alerts of rug pull contracts indentified by Token Sniffer/Solidus Labs",
   "repository": "https://github.com/forta-network/forta-solidus-bot",
   "chainIds": [
     1
