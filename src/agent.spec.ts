@@ -1,10 +1,11 @@
 import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
 import { TestBlockEvent } from "forta-agent-tools/lib/test";
+import { createAddress } from "forta-agent-tools";
 import { when } from "jest-when";
 import WS from "jest-websocket-mock";
 import WebSocket from "ws";
 import { provideInitialize, provideHandleBlock } from "./agent";
-import { RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
+import { Exploit, RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
 import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
 
 function createRugPullFinding(rugPullResult: RugPullResult): Finding {
@@ -66,22 +67,15 @@ function createRugPullFinding(rugPullResult: RugPullResult): Finding {
   });
 }
 
-function createContractFalsePositiveFinding(
+function createFalsePositiveFinding(
   falsePositiveEntry: FalsePositiveInfo,
-  chainId: string,
-  contractAddress: string,
-  deployerAddress: string,
-  creationTime: string,
-  contractName: string,
-  tokenSymbol: string,
-  exploitId: string,
-  exploitName: string,
-  exploitType: string
+  labelMetadata: RugPullResult,
+  labelExploit: Exploit
 ): Finding {
   return Finding.fromObject({
-    name: `False positive rug pull contract previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
-    description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]} a rug pull`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-CONTRACT",
+    name: `False positive rug pull contract, and its deployer, previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
+    description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]}, and its deployer ${falsePositiveEntry["deployerAddress"]}, a rug pull`,
+    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
     severity: FindingSeverity.Info,
     type: FindingType.Info,
     metadata: {},
@@ -93,41 +87,17 @@ function createContractFalsePositiveFinding(
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId,
-          contractAddress,
-          deployerAddress,
-          creationTime,
-          contractName,
-          tokenSymbol,
-          exploitId,
-          exploitName,
-          exploitType,
+          chainId: labelMetadata.chain_id,
+          contractAddress: labelMetadata.address,
+          deployerAddress: labelMetadata.deployer_addr,
+          creationTime: labelMetadata.created_at,
+          contractName: labelMetadata.name,
+          tokenSymbol: labelMetadata.symbol,
+          exploitId: labelExploit.id.toString(),
+          exploitName: labelExploit.name,
+          exploitType: labelExploit.types,
         },
       }),
-    ],
-  });
-}
-
-function createDeployerFalsePositiveFinding(
-  falsePositiveEntry: FalsePositiveInfo,
-  chainId: string,
-  contractAddress: string,
-  deployerAddress: string,
-  creationTime: string,
-  contractName: string,
-  tokenSymbol: string,
-  exploitId: string,
-  exploitName: string,
-  exploitType: string
-): Finding {
-  return Finding.fromObject({
-    name: "False positive rug pull contract deployer previously incorrectly labeled",
-    description: `Rug pull detector previously labeled ${falsePositiveEntry["deployerAddress"]} a rug pull deployer`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-DEPLOYER",
-    severity: FindingSeverity.Info,
-    type: FindingType.Info,
-    metadata: {},
-    labels: [
       Label.fromObject({
         entity: falsePositiveEntry["deployerAddress"],
         entityType: EntityType.Address,
@@ -135,17 +105,17 @@ function createDeployerFalsePositiveFinding(
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId,
-          contractAddress,
-          deployerAddress,
-          creationTime,
-          contractName,
-          tokenSymbol,
-          exploitId,
-          exploitName,
-          exploitType,
+          chainId: labelMetadata.chain_id,
+          contractAddress: labelMetadata.address,
+          deployerAddress: labelMetadata.deployer_addr,
+          creationTime: labelMetadata.created_at,
+          contractName: labelMetadata.name,
+          tokenSymbol: labelMetadata.symbol,
+          exploitId: labelExploit.id.toString(),
+          exploitName: labelExploit.name,
+          exploitType: labelExploit.types,
         },
-      }),
+      })
     ],
   });
 }
@@ -261,7 +231,11 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
   it("creates an alert for an address then creates a false positive alert for that address that was a false positive", async () => {
     const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
     when(mockLabelFetcher)
-      .calledWith(mockDataOneResult["result"][0]["address"], "Rug pull contract")
+      .calledWith({
+        contractName: "mockOne",
+        contractAddress: createAddress("0x10"),
+        deployerAddress: createAddress("0x11"),
+        comment: "Not Rug Pull",})
       .mockReturnValue(
         createFetchedLabels(
           mockDataOneResult["result"][0]["chain_id"],
@@ -273,21 +247,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
           mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
           mockDataOneResult["result"][0]["exploits"][0]["name"],
           mockDataOneResult["result"][0]["exploits"][0]["types"],
-          "Rug pull contract"
-        )
-      )
-      .calledWith(mockDataOneResult["result"][0]["deployer_addr"], "Rug pull contract deployer")
-      .mockReturnValue(
-        createFetchedLabels(
-          mockDataOneResult["result"][0]["chain_id"],
-          mockDataOneResult["result"][0]["address"],
-          mockDataOneResult["result"][0]["deployer_addr"],
-          mockDataOneResult["result"][0]["created_at"],
-          mockDataOneResult["result"][0]["name"],
-          mockDataOneResult["result"][0]["symbol"],
-          mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-          mockDataOneResult["result"][0]["exploits"][0]["name"],
-          mockDataOneResult["result"][0]["exploits"][0]["types"],
+          "Rug pull contract",
           "Rug pull contract deployer"
         )
       );
@@ -304,34 +264,14 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockBlockEvent.setNumber(300);
     findings = await handleBlock(mockBlockEvent);
 
-    console.log(`findings in test: ${JSON.stringify(findings)}`);
-
     const mockFpValues: FalsePositiveInfo[] = Object.values(mockFpDb);
+
     expect(findings).toStrictEqual([
-      createContractFalsePositiveFinding(
+      createFalsePositiveFinding(
         mockFpValues[0],
-        mockDataOneResult["result"][0]["chain_id"],
-        mockDataOneResult["result"][0]["address"],
-        mockDataOneResult["result"][0]["deployer_addr"],
-        mockDataOneResult["result"][0]["created_at"],
-        mockDataOneResult["result"][0]["name"],
-        mockDataOneResult["result"][0]["symbol"],
-        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-        mockDataOneResult["result"][0]["exploits"][0]["name"],
-        mockDataOneResult["result"][0]["exploits"][0]["types"]
-      ),
-      createDeployerFalsePositiveFinding(
-        mockFpValues[0],
-        mockDataOneResult["result"][0]["chain_id"],
-        mockDataOneResult["result"][0]["address"],
-        mockDataOneResult["result"][0]["deployer_addr"],
-        mockDataOneResult["result"][0]["created_at"],
-        mockDataOneResult["result"][0]["name"],
-        mockDataOneResult["result"][0]["symbol"],
-        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-        mockDataOneResult["result"][0]["exploits"][0]["name"],
-        mockDataOneResult["result"][0]["exploits"][0]["types"]
-      ),
+        mockDataOneResult["result"][0],
+        mockDataOneResult["result"][0]["exploits"][0],
+      )
     ]);
 
     mockBlockEvent.setNumber(600);
@@ -350,6 +290,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       firstFiftyRugPullFindings.push(createRugPullFinding(result));
     });
 
+    mockBlockEvent.setNumber(10);
     let findings = await handleBlock(mockBlockEvent);
     expect(findings).toStrictEqual(firstFiftyRugPullFindings);
 

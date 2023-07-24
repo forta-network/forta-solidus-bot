@@ -46,13 +46,32 @@ export function createFetchedLabels(
   exploitId: string,
   exploitName: string,
   exploitType: string,
-  label: string
+  contractLabel: string,
+  deployerLabel: string
 ): Label[] {
   const labels: Label[] = [
     {
       entity: contractAddress,
       entityType: EntityType.Address,
-      label: label,
+      label: contractLabel,
+      confidence: 0.99,
+      remove: false,
+      metadata: {
+        chainId,
+        contractAddress,
+        deployerAddress,
+        creationTime,
+        contractName,
+        tokenSymbol,
+        exploitId,
+        exploitName,
+        exploitType,
+      },
+    },
+    {
+      entity: deployerAddress,
+      entityType: EntityType.Address,
+      label: deployerLabel,
       confidence: 0.99,
       remove: false,
       metadata: {

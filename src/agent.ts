@@ -6,22 +6,19 @@ import {
   Finding,
   getLabels,
   LabelsResponse,
-  Label
+  Label,
 } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
 import axios from "axios";
 import { RugPullResult, RugPullPayload, FalsePositiveInfo, FalsePositiveDatabase } from "./types";
-import {
-  createRugPullFinding,
-  createContractFalsePositiveFinding,
-  createDeployerFalsePositiveFinding,
-} from "./findings";
+import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
 
 // `123` URL for testing
 const WEBSOCKET_URL: string = "ws://localhost:1234";
 // PROD URL
 // const WEBSOCKET_URL = "";
-const FP_DB_URL: string = "https://raw.githubusercontent.com/forta-network/forta-solidus-bot/main/false.positive.database.json";
+const FP_DB_URL: string =
+  "https://raw.githubusercontent.com/forta-network/forta-solidus-bot/main/false.positive.database.json";
 const BOT_ID: string = "0x1ae0e0734a5d2b4ab26b8f63b5c323cceb8ecf9ac16d1276fcb399be0923567a";
 const MAX_RUG_PULL_RESULTS_PER_BLOCK: number = 50;
 
@@ -30,14 +27,14 @@ const unalertedRugPullResults: RugPullResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
 
-async function fetchLabels(entityAddress: string, entityLabel: string): Promise<Label[]> {
+async function fetchLabels(falsePositiveEntry: FalsePositiveInfo): Promise<Label[]> {
   const labels: Label[] = [];
   let hasNext = true;
 
   while (hasNext) {
     const results: LabelsResponse = await getLabels({
-      entities: [entityAddress],
-      labels: [entityLabel],
+      entities: [falsePositiveEntry["contractAddress"], falsePositiveEntry["deployerAddress"]],
+      labels: ["Rug pull contract", "Rug pull contract deployer"],
       sourceIds: [BOT_ID],
       entityType: "Address",
     });
@@ -87,7 +84,7 @@ async function fetchFalsePositiveList(falsePositiveDbUrl: string): Promise<False
       falsePositiveDb = (await axios.get(falsePositiveDbUrl)).data;
       break;
     } catch (e) {
-      if(i === retryCount) {
+      if (i === retryCount) {
         console.log("Error fetching false positive database.");
       }
     }
@@ -106,7 +103,7 @@ export function provideInitialize(ws: WebSocket): Initialize {
 export function provideHandleBlock(
   falsePositiveDbUrl: string,
   falsePositiveFetcher: (url: string) => Promise<FalsePositiveDatabase>,
-  labelFetcher: (entityAddress: string, entityLabel: string) => Promise<Label[]>
+  labelFetcher: (falsePositiveEntry: FalsePositiveInfo) => Promise<Label[]>
 ): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
@@ -120,41 +117,12 @@ export function provideHandleBlock(
 
       await Promise.all(
         Object.values(falsePositiveDb).map(async (fpEntry: FalsePositiveInfo) => {
-          if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
-            (await labelFetcher(fpEntry["contractAddress"], "Rug pull contract")).forEach((label: Label) => {
-              findings.push(
-                createContractFalsePositiveFinding(
-                  fpEntry,
-                  label.metadata.chainId,
-                  label.metadata.contractAddress,
-                  label.metadata.deployerAddress,
-                  label.metadata.creationTime,
-                  label.metadata.contractName,
-                  label.metadata.tokenSymbol,
-                  label.metadata.exploitId,
-                  label.metadata.exploitName,
-                  label.metadata.exploitType
-                )
-              );
-            });
-            (await labelFetcher(fpEntry["deployerAddress"], "Rug pull contract deployer")).forEach((label: Label) => {
-              findings.push(
-                createDeployerFalsePositiveFinding(
-                  fpEntry,
-                  label.metadata.chainId,
-                  label.metadata.contractAddress,
-                  label.metadata.deployerAddress,
-                  label.metadata.creationTime,
-                  label.metadata.contractName,
-                  label.metadata.tokenSymbol,
-                  label.metadata.exploitId,
-                  label.metadata.exploitName,
-                  label.metadata.exploitType
-                )
-              );
-            });
-            alertedFalsePositives.push(fpEntry["contractName"]);
-          }
+          (await labelFetcher(fpEntry)).forEach((label: Label) => {
+            if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
+              findings.push(createFalsePositiveFinding(fpEntry, label.metadata));
+              alertedFalsePositives.push(fpEntry["contractName"]);
+            }
+          });
         })
       );
     }

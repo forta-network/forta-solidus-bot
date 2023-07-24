@@ -1,4 +1,4 @@
-type Exploit = {
+export type Exploit = {
   id: number;
   name: string;
   types: string;

@@ -69,9 +69,9 @@ This bot detects rug pull contracts by consuming data from an external source pr
         - `exploitName` - name of exploit
         - `exploitType` - type of exploit
 
-- SOLIDUS-RUG-PULL-FALSE-POSITIVE-CONTRACT
+- SOLIDUS-RUG-PULL-FALSE-POSITIVE
 
-  - Fired when a false positive was identified for a contract
+  - Fired when a false positive was identified for a contract and its deployer
     - Removes the previous label for this entity
   - Severity is always set to "info"
   - Type is always set to "info"
@@ -92,15 +92,7 @@ This bot detects rug pull contracts by consuming data from an external source pr
         - `exploitId` - exploit's identifier
         - `exploitName` - name of exploit
         - `exploitType` - type of exploit
-
-- SOLIDUS-RUG-PULL-FALSE-POSITIVE-DEPLOYER
-
-  - Fired when a false positive was identified for a contract
-    - Removes the previous label for this entity
-  - Severity is always set to "info"
-  - Type is always set to "info"
-  - Labels:
-    - Label 1:
+    - Label 2:
       - `entity`: Account previously declared a rug pull contract deployer
       - `entityType`: The type of the entity, always set to "Address"
       - `label`: The type of the label, always set to "Rug pull contract deployer"
