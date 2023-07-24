@@ -1,6 +1,6 @@
 import { Label, EntityType } from "forta-agent";
-import { RugPullResult, RugPullPayload, FalsePositiveDatabase } from "./types";
 import { createAddress } from "forta-agent-tools";
+import { RugPullResult, RugPullPayload, FalsePositiveDatabase } from "./types";
 
 function createSingleRugPullResult(identifier: number): RugPullResult {
   const rugPullResult: RugPullResult = {

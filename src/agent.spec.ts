@@ -1,6 +1,6 @@
 import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
-import { TestBlockEvent } from "forta-agent-tools/lib/test";
 import { createAddress } from "forta-agent-tools";
+import { TestBlockEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
 import WS from "jest-websocket-mock";
 import WebSocket from "ws";
@@ -127,10 +127,11 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
   const mockLabelFetcher = jest.fn();
   let handleBlock: HandleBlock;
   const mockBlockEvent = new TestBlockEvent().setNumber(10);
+  const mockWebSocketUrl: string = "ws://localhost:1234";
 
   beforeEach(async () => {
-    mockServer = new WS("ws://localhost:1234", { jsonProtocol: true });
-    mockClient = new WebSocket("ws://localhost:1234");
+    mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
+    mockClient = new WebSocket(mockWebSocketUrl);
     await mockServer.connected;
 
     mockFpFetcher.mockReturnValue(mockFpDb);
@@ -188,26 +189,26 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
     const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
 
-    mockServer.send(mockDataOneResult);
+    await mockServer.send(mockDataOneResult);
     let findings = await handleBlock(mockBlockEvent);
     expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     findings = await handleBlock(mockBlockEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
-    mockServer.close();
+    await mockServer.close();
     // Code `1000` since connection was closed "gracefully"
     expect(spy).toHaveBeenCalledWith("WebSocket connection closed. Code: 1000. Reason (could be empty): ");
 
     // Mocking server re-initialization
     // and re-establishing connection
-    mockServer = new WS("ws://localhost:1234", { jsonProtocol: true });
+    mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
     findings = await handleBlock(mockBlockEvent);
     // No findings, since connection only
     // re-established and no data served
     expect(findings).toStrictEqual([]);
 
-    mockServer.send(mockDataTwoResults);
+    await mockServer.send(mockDataTwoResults);
     findings = await handleBlock(mockBlockEvent);
 
     expect(findings).toStrictEqual([
