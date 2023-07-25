@@ -20,13 +20,10 @@ export type RugPullPayload = {
   result: RugPullResult[];
 };
 
-export type FalsePositiveInfo = {
+export type FalsePositiveEntry = {
   contractName: string;
   contractAddress: string;
   deployerAddress: string;
+  chainId: string;
   comment: string;
-};
-
-export type FalsePositiveDatabase = {
-  [key: string]: FalsePositiveInfo;
 };

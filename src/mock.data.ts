@@ -1,6 +1,6 @@
 import { Label, EntityType } from "forta-agent";
 import { createAddress } from "forta-agent-tools";
-import { RugPullResult, RugPullPayload, FalsePositiveDatabase } from "./types";
+import { RugPullResult, RugPullPayload } from "./types";
 
 function createSingleRugPullResult(identifier: number): RugPullResult {
   const rugPullResult: RugPullResult = {
@@ -90,12 +90,3 @@ export function createFetchedLabels(
 
   return labels;
 }
-
-export const mockFpDb: FalsePositiveDatabase = {
-  mockOne: {
-    contractName: "mockOne",
-    contractAddress: createAddress("0x10"),
-    deployerAddress: createAddress("0x11"),
-    comment: "Not Rug Pull",
-  },
-};

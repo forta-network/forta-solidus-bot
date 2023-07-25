@@ -2,11 +2,30 @@ import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, 
 import { createAddress } from "forta-agent-tools";
 import { TestBlockEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
-import WS from "jest-websocket-mock";
 import WebSocket from "ws";
+import WS from "jest-websocket-mock";
+import fs from "fs";
+import { parse, Parser } from "csv-parse";
+import { finished } from "stream/promises";
 import { provideInitialize, provideHandleBlock } from "./agent";
-import { Exploit, RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
-import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
+import { Exploit, RugPullPayload, RugPullResult, FalsePositiveEntry } from "./types";
+import { createMockRugPullResults, createFetchedLabels } from "./mock.data";
+
+async function mockFpFetcher(csvPath: string): Promise<FalsePositiveEntry[]> {
+  const records: FalsePositiveEntry[] = [];
+
+  const parser: Parser = fs.createReadStream(csvPath).pipe(parse({ columns: true }));
+
+  parser.on("readable", function () {
+    let record: FalsePositiveEntry;
+    while ((record = parser.read()) !== null) {
+      records.push(record);
+    }
+  });
+
+  await finished(parser);
+  return records;
+}
 
 function createRugPullFinding(rugPullResult: RugPullResult): Finding {
   return Finding.fromObject({
@@ -68,7 +87,7 @@ function createRugPullFinding(rugPullResult: RugPullResult): Finding {
 }
 
 function createFalsePositiveFinding(
-  falsePositiveEntry: FalsePositiveInfo,
+  falsePositiveEntry: FalsePositiveEntry,
   labelMetadata: RugPullResult,
   labelExploit: Exploit
 ): Finding {
@@ -115,7 +134,7 @@ function createFalsePositiveFinding(
           exploitName: labelExploit.name,
           exploitType: labelExploit.types,
         },
-      })
+      }),
     ],
   });
 }
@@ -123,23 +142,21 @@ function createFalsePositiveFinding(
 describe("Solidus Rug Pull Bot Test Suite", () => {
   let mockServer: WS;
   let mockClient: WebSocket;
-  const mockFpFetcher = jest.fn();
   const mockLabelFetcher = jest.fn();
   let handleBlock: HandleBlock;
   const mockBlockEvent = new TestBlockEvent().setNumber(10);
   const mockWebSocketUrl: string = "ws://localhost:1234";
+  const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
     mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
     mockClient = new WebSocket(mockWebSocketUrl);
     await mockServer.connected;
 
-    mockFpFetcher.mockReturnValue(mockFpDb);
-
     const initialize: Initialize = provideInitialize(mockClient);
     await initialize();
 
-    handleBlock = provideHandleBlock("testFpURL", mockFpFetcher, mockLabelFetcher);
+    handleBlock = provideHandleBlock(mockFpCsvPath, mockLabelFetcher);
     const findings = await handleBlock(mockBlockEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
@@ -235,8 +252,10 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       .calledWith({
         contractName: "mockOne",
         contractAddress: createAddress("0x10"),
+        chainId: "1",
         deployerAddress: createAddress("0x11"),
-        comment: "Not Rug Pull",})
+        comment: "Not rug pull",
+      })
       .mockReturnValue(
         createFetchedLabels(
           mockDataOneResult["result"][0]["chain_id"],
@@ -265,7 +284,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockBlockEvent.setNumber(300);
     findings = await handleBlock(mockBlockEvent);
 
-    const mockFpValues: FalsePositiveInfo[] = Object.values(mockFpDb);
+    const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
 
     expect(findings).toStrictEqual([
       createFalsePositiveFinding(

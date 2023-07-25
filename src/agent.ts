@@ -1,14 +1,7 @@
-import {
-  Initialize,
-  setPrivateFindings,
-  BlockEvent,
-  HandleBlock,
-  Finding,
-  Label,
-} from "forta-agent";
+import { Initialize, setPrivateFindings, BlockEvent, HandleBlock, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_DB_URL, WEBSOCKET_URL } from "./constants";
-import { RugPullResult, RugPullPayload, FalsePositiveInfo, FalsePositiveDatabase } from "./types";
+import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, WEBSOCKET_URL } from "./constants";
+import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
 import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
 import { fetchLabels, fetchFalsePositiveList } from "./utils";
 
@@ -51,9 +44,8 @@ export function provideInitialize(ws: WebSocket): Initialize {
 }
 
 export function provideHandleBlock(
-  falsePositiveDbUrl: string,
-  falsePositiveFetcher: (url: string) => Promise<FalsePositiveDatabase>,
-  labelFetcher: (falsePositiveEntry: FalsePositiveInfo) => Promise<Label[]>
+  falsePositiveListUrl: string,
+  labelFetcher: (falsePositiveEntry: FalsePositiveEntry) => Promise<Label[]>
 ): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
@@ -64,10 +56,10 @@ export function provideHandleBlock(
     const findings: Finding[] = [];
 
     if (blockEvent.blockNumber % 300 == 0) {
-      const falsePositiveDb: FalsePositiveDatabase = await falsePositiveFetcher(falsePositiveDbUrl);
+      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(falsePositiveListUrl);
 
       await Promise.all(
-        Object.values(falsePositiveDb).map(async (fpEntry: FalsePositiveInfo) => {
+        falsePositiveList.map(async (fpEntry: FalsePositiveEntry) => {
           (await labelFetcher(fpEntry)).forEach((label: Label) => {
             if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
               findings.push(createFalsePositiveFinding(fpEntry, label.metadata));
@@ -90,7 +82,7 @@ export function provideHandleBlock(
 
 export default {
   initialize: provideInitialize(webSocket),
-  handleBlock: provideHandleBlock(FP_DB_URL, fetchFalsePositiveList, fetchLabels),
+  handleBlock: provideHandleBlock(FP_CSV_PATH, fetchLabels),
   provideInitialize,
   provideHandleBlock,
 };

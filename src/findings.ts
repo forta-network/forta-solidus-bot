@@ -1,5 +1,5 @@
 import { Finding, FindingType, FindingSeverity, Label, EntityType } from "forta-agent";
-import { RugPullResult, FalsePositiveInfo } from "./types";
+import { RugPullResult, FalsePositiveEntry } from "./types";
 
 export function createRugPullFinding(rugPullResult: RugPullResult): Finding {
   return Finding.fromObject({
@@ -61,7 +61,7 @@ export function createRugPullFinding(rugPullResult: RugPullResult): Finding {
 }
 
 export function createFalsePositiveFinding(
-  falsePositiveEntry: FalsePositiveInfo,
+  falsePositiveEntry: FalsePositiveEntry,
   labelMetadata: { [key: string]: string }
 ): Finding {
   return Finding.fromObject({
