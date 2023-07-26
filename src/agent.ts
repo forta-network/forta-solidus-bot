@@ -1,11 +1,11 @@
 import { Initialize, setPrivateFindings, BlockEvent, HandleBlock, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, WEBSOCKET_URL } from "./constants";
+import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, WEBSOCKET_URL, API_KEY } from "./constants";
 import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
 import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
 import { fetchLabels, fetchFalsePositiveList } from "./utils";
 
-let webSocket: WebSocket = new WebSocket(WEBSOCKET_URL);
+let webSocket: WebSocket = new WebSocket(WEBSOCKET_URL, "", { headers: { apiKey: API_KEY } });
 // Bots are allocated 1GB of memory, so storing
 // `RugPullResult`s won't be an issue. Especially
 // since entries will be cleared after alerted.
@@ -52,7 +52,7 @@ export function provideHandleBlock(
 ): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
-      webSocket = new WebSocket(WEBSOCKET_URL);
+      webSocket = new WebSocket(WEBSOCKET_URL, "", { headers: { apikey: API_KEY } });
       establishNewWebSocketClient(webSocket);
     }
 

@@ -11,3 +11,8 @@ export const MAX_RUG_PULL_RESULTS_PER_BLOCK: number = 50;
 export const WEBSOCKET_URL: string = "ws://localhost:1234";
 // PROD URL
 // export const WEBSOCKET_URL = "";
+
+// `abcxyz` for testing
+export const API_KEY: string = "abcxyz";
+// PROD API KEY
+// export const API_KEY: string = "";

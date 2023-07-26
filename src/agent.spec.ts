@@ -146,11 +146,12 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
   let handleBlock: HandleBlock;
   const mockBlockEvent = new TestBlockEvent().setNumber(10);
   const mockWebSocketUrl: string = "ws://localhost:1234";
+  const mockWebSocketApiKey: string = "abcxyz";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
     mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
-    mockClient = new WebSocket(mockWebSocketUrl);
+    mockClient = new WebSocket(mockWebSocketUrl, "", { headers: { apikey: mockWebSocketApiKey } });
     await mockServer.connected;
 
     const initialize: Initialize = provideInitialize(mockClient);
@@ -290,8 +291,8 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       createFalsePositiveFinding(
         mockFpValues[0],
         mockDataOneResult["result"][0],
-        mockDataOneResult["result"][0]["exploits"][0],
-      )
+        mockDataOneResult["result"][0]["exploits"][0]
+      ),
     ]);
 
     mockBlockEvent.setNumber(600);
