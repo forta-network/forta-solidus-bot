@@ -301,6 +301,11 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     expect(findings).toStrictEqual([]);
   });
 
+  // There is a limit of 250KB for pushed findings,
+  // but that would be more than 50 findings.
+  // Therefore, this test indirectly tests to confirm
+  // we aren't attempting to push more than
+  // 250 KB worth of findings either.
   it("creates alerts up to the 50 alert limit then creates the rest in the subsequent block", async () => {
     const mockDataSixtyFiveResults: RugPullPayload = createMockRugPullResults(65);
     mockServer.send(mockDataSixtyFiveResults);

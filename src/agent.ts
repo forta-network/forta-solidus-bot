@@ -6,6 +6,9 @@ import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
 import { fetchLabels, fetchFalsePositiveList } from "./utils";
 
 let webSocket: WebSocket = new WebSocket(WEBSOCKET_URL);
+// Bots are allocated 1GB of memory, so storing
+// `RugPullResult`s won't be an issue. Especially
+// since entries will be cleared after alerted.
 const unalertedRugPullResults: RugPullResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
