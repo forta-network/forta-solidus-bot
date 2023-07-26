@@ -2,10 +2,10 @@
 
 ## Description
 
-This bot detects rug pull contracts by consuming data from an external source provided by Token Sniffer/Solidus Labs.
+This bot is an extension of Token Sniffer, the first and most-used token security platform, powered by Solidus Labs. Token Sniffer’s smart contract scanner analyzes token contract code and functionality, testing for malicious patterns to assess whether or not a token is a hard rug pull. It provides intelligence on both the token and the token’s creator. This bot covers seven typologies of hard rug pulls across twelve different EVM chains. 
 
 ## Supported Chains
-> Note: Bot monitors mainnet Ethereum, but via the Token Sniffer data source, it monitors rug pull activity of the chains below.
+> Note: Bot monitors mainnet Ethereum, but via the Token Sniffer data source, its monitorsing of rug pull activity is extended to the chains below.
 - Ethereum
 - Optimism
 - BNB Smart Chain
