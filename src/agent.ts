@@ -1,4 +1,4 @@
-import { Initialize, setPrivateFindings, BlockEvent, HandleBlock, Finding, Label } from "forta-agent";
+import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
 import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, WEBSOCKET_URL, API_KEY } from "./constants";
 import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
@@ -46,11 +46,11 @@ export function provideInitialize(ws: WebSocket): Initialize {
   };
 }
 
-export function provideHandleBlock(
+export function provideHandleTransaction(
   falsePositiveListUrl: string,
   labelFetcher: (falsePositiveEntry: FalsePositiveEntry) => Promise<Label[]>
-): HandleBlock {
-  return async (blockEvent: BlockEvent): Promise<Finding[]> => {
+): HandleTransaction {
+  return async (txEvent: TransactionEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
       webSocket = new WebSocket(WEBSOCKET_URL, "", { headers: { apikey: API_KEY } });
       establishNewWebSocketClient(webSocket);
@@ -58,7 +58,7 @@ export function provideHandleBlock(
 
     const findings: Finding[] = [];
 
-    if (blockEvent.blockNumber % 300 == 0) {
+    if (txEvent.blockNumber % 300 == 0) {
       const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(falsePositiveListUrl);
 
       await Promise.all(
@@ -85,7 +85,7 @@ export function provideHandleBlock(
 
 export default {
   initialize: provideInitialize(webSocket),
-  handleBlock: provideHandleBlock(FP_CSV_PATH, fetchLabels),
+  handleTransaction: provideHandleTransaction(FP_CSV_PATH, fetchLabels),
   provideInitialize,
-  provideHandleBlock,
+  provideHandleTransaction,
 };

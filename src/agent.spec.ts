@@ -1,13 +1,13 @@
-import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
+import { Initialize, HandleTransaction, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
 import { createAddress } from "forta-agent-tools";
-import { TestBlockEvent } from "forta-agent-tools/lib/test";
+import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
 import WebSocket from "ws";
 import WS from "jest-websocket-mock";
 import fs from "fs";
 import { parse, Parser } from "csv-parse";
 import { finished } from "stream/promises";
-import { provideInitialize, provideHandleBlock } from "./agent";
+import { provideInitialize, provideHandleTransaction } from "./agent";
 import { Exploit, RugPullPayload, RugPullResult, FalsePositiveEntry } from "./types";
 import { createMockRugPullResults, createFetchedLabels } from "./mock.data";
 
@@ -143,8 +143,8 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
   let mockServer: WS;
   let mockClient: WebSocket;
   const mockLabelFetcher = jest.fn();
-  let handleBlock: HandleBlock;
-  const mockBlockEvent = new TestBlockEvent().setNumber(10);
+  let handleTransaction: HandleTransaction;
+  const mockTxEvent = new TestTransactionEvent().setBlock(10);
   const mockWebSocketUrl: string = "ws://localhost:1234";
   const mockWebSocketApiKey: string = "abcxyz";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
@@ -157,8 +157,8 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     const initialize: Initialize = provideInitialize(mockClient);
     await initialize();
 
-    handleBlock = provideHandleBlock(mockFpCsvPath, mockLabelFetcher);
-    const findings = await handleBlock(mockBlockEvent);
+    handleTransaction = provideHandleTransaction(mockFpCsvPath, mockLabelFetcher);
+    const findings = await handleTransaction(mockTxEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
   });
@@ -171,14 +171,14 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     const mockDataThreeResults: RugPullPayload = createMockRugPullResults(3);
     mockServer.send(mockDataThreeResults);
 
-    let findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([
       createRugPullFinding(mockDataThreeResults["result"][0]),
       createRugPullFinding(mockDataThreeResults["result"][1]),
       createRugPullFinding(mockDataThreeResults["result"][2]),
     ]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings since entries were cleared
     expect(findings).toStrictEqual([]);
   });
@@ -190,14 +190,14 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     mockServer.send(mockDataOneResult);
     mockServer.send(mockDataTwoResults);
 
-    let findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([
       createRugPullFinding(mockDataOneResult["result"][0]),
       createRugPullFinding(mockDataTwoResults["result"][0]),
       createRugPullFinding(mockDataTwoResults["result"][1]),
     ]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
   });
@@ -208,10 +208,10 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
 
     await mockServer.send(mockDataOneResult);
-    let findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
     await mockServer.close();
@@ -221,13 +221,13 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     // Mocking server re-initialization
     // and re-establishing connection
     mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since connection only
     // re-established and no data served
     expect(findings).toStrictEqual([]);
 
     await mockServer.send(mockDataTwoResults);
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
 
     expect(findings).toStrictEqual([
       createRugPullFinding(mockDataTwoResults["result"][0]),
@@ -240,7 +240,7 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
 
     mockServer.send(mockDataOneResult);
-    let findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
     mockServer.error();
@@ -275,15 +275,15 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
 
     mockServer.send(mockDataOneResult);
 
-    let findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
 
-    mockBlockEvent.setNumber(300);
-    findings = await handleBlock(mockBlockEvent);
+    mockTxEvent.setBlock(300);
+    findings = await handleTransaction(mockTxEvent);
 
     const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
 
@@ -295,8 +295,8 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       ),
     ]);
 
-    mockBlockEvent.setNumber(600);
-    findings = await handleBlock(mockBlockEvent);
+    mockTxEvent.setBlock(600);
+    findings = await handleTransaction(mockTxEvent);
     // FP Finding should not be created for
     // previous fetched Label
     expect(findings).toStrictEqual([]);
@@ -316,8 +316,8 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
       firstFiftyRugPullFindings.push(createRugPullFinding(result));
     });
 
-    mockBlockEvent.setNumber(10);
-    let findings = await handleBlock(mockBlockEvent);
+    mockTxEvent.setBlock(10);
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual(firstFiftyRugPullFindings);
 
     const remainingFifteenRugPullFindings: Finding[] = [];
@@ -326,10 +326,10 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
     });
 
     // Bot saved the "overflowing" 15 rug pull results
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual(remainingFifteenRugPullFindings);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([]);
   });
 });
