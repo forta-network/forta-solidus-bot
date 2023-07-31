@@ -5,14 +5,12 @@ import {
   TransactionEvent,
   Finding,
   Label,
-  fetchJwt,
 } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import fetch from "node-fetch";
-import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, DATABASE_URL } from "./constants";
+import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
 import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
 import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
-import { fetchLabels, fetchFalsePositiveList } from "./utils";
+import { fetchWebSocketInfo, fetchLabels, fetchFalsePositiveList } from "./utils";
 
 let webSocket: WebSocket;
 // Bots are allocated 1GB of memory, so storing
@@ -21,25 +19,6 @@ let webSocket: WebSocket;
 const unalertedRugPullResults: RugPullResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
-
-async function fetchWebSocketInfo(): Promise<string> {
-  const token = await fetchJwt({});
-  const headers = { Authorization: `Bearer ${token}` };
-  try {
-    const response = await fetch(`${DATABASE_URL}`, { headers });
-
-    if (response.ok) {
-      const data: string = await response.text();
-      return data;
-    } else {
-      console.log(`database has no entry`);
-      return "";
-    }
-  } catch (e) {
-    console.log("Error in fetching data.");
-    throw e;
-  }
-}
 
 async function createNewWebSocket(): Promise<WebSocket> {
   const webSocketUrl: string = await fetchWebSocketInfo();

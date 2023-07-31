@@ -1,9 +1,29 @@
-import { getLabels, LabelsResponse, Label } from "forta-agent";
+import { getLabels, LabelsResponse, Label, fetchJwt } from "forta-agent";
+import fetch from "node-fetch";
 import fs from "fs";
 import { parse, Parser } from "csv-parse";
 import { finished } from "stream/promises";
-import { BOT_ID } from "./constants";
+import { BOT_ID, DATABASE_URL } from "./constants";
 import { FalsePositiveEntry } from "./types";
+
+export async function fetchWebSocketInfo(): Promise<string> {
+  const token = await fetchJwt({});
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const response = await fetch(`${DATABASE_URL}`, { headers });
+
+    if (response.ok) {
+      const data: string = await response.text();
+      return data;
+    } else {
+      console.log(`database has no entry`);
+      return "";
+    }
+  } catch (e) {
+    console.log("Error in fetching data.");
+    throw e;
+  }
+}
 
 export async function fetchLabels(falsePositiveEntry: FalsePositiveEntry): Promise<Label[]> {
   const labels: Label[] = [];
