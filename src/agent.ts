@@ -1,11 +1,4 @@
-import {
-  Initialize,
-  setPrivateFindings,
-  HandleTransaction,
-  TransactionEvent,
-  Finding,
-  Label,
-} from "forta-agent";
+import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
 import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
 import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";

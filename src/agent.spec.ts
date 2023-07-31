@@ -34,65 +34,74 @@ async function mockFpFetcher(csvPath: string): Promise<FalsePositiveEntry[]> {
   return records;
 }
 
-function createRugPullFinding(rugPullResult: RugPullResult): Finding {
-  const { chain_id, address, deployer_addr, name, symbol, created_at }: RugPullResult = rugPullResult;
-  const resultString: string = chain_id + address + deployer_addr + name + symbol + created_at;
+export function createRugPullFinding(rugPullResult: RugPullResult): Finding {
+  const {
+    chain_id: chainId,
+    address: contractAddress,
+    deployer_addr: deployerAddress,
+    name: contractName,
+    symbol: tokenSymbol,
+    created_at: creationTime,
+    exploits,
+  }: RugPullResult = rugPullResult;
+  const { id: exploitId, name: exploitName, types: exploitType }: Exploit = exploits[0];
+  const resultString: string = chainId + contractAddress + deployerAddress + contractName + tokenSymbol + creationTime;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 
   return Finding.fromObject({
-    name: `Rug pull contract detected: ${rugPullResult["name"]}`,
-    description: rugPullResult["exploits"][0]["name"],
+    name: `Rug pull contract detected: ${contractName}`,
+    description: exploitName,
     alertId: "SOLIDUS-RUG-PULL",
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
     // uniqueKey,
-    // source: { chainSource: { chainId: Number(rugPullResult["chain_id"]) } },
+    // source: { chainSource: { chainId: Number(chainId) } },
     metadata: {
-      chainId: rugPullResult["chain_id"],
-      deployerAddress: rugPullResult["deployer_addr"],
-      createdAddress: rugPullResult["address"],
-      creationTime: rugPullResult["created_at"],
-      contractName: rugPullResult["name"],
-      tokenSymbol: rugPullResult["symbol"],
-      exploitId: rugPullResult["exploits"][0]["id"].toString(),
-      exploitName: rugPullResult["exploits"][0]["name"],
-      exploitType: rugPullResult["exploits"][0]["types"],
+      chainId,
+      deployerAddress,
+      contractAddress,
+      creationTime,
+      contractName,
+      tokenSymbol,
+      exploitId: exploitId.toString(),
+      exploitName,
+      exploitType,
     },
     labels: [
       Label.fromObject({
-        entity: rugPullResult["address"],
+        entity: contractAddress,
         entityType: EntityType.Address,
         label: "Rug pull contract",
         confidence: 0.99,
         remove: false,
         metadata: {
-          chainId: rugPullResult["chain_id"],
-          contractAddress: rugPullResult["address"],
-          deployerAddress: rugPullResult["deployer_addr"],
-          creationTime: rugPullResult["created_at"],
-          contractName: rugPullResult["name"],
-          tokenSymbol: rugPullResult["symbol"],
-          exploitId: rugPullResult["exploits"][0]["id"].toString(),
-          exploitName: rugPullResult["exploits"][0]["name"],
-          exploitType: rugPullResult["exploits"][0]["types"],
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId: exploitId.toString(),
+          exploitName,
+          exploitType,
         },
       }),
       Label.fromObject({
-        entity: rugPullResult["deployer_addr"],
+        entity: deployerAddress,
         entityType: EntityType.Address,
         label: "Rug pull contract deployer",
         confidence: 0.99,
         remove: false,
         metadata: {
-          chainId: rugPullResult["chain_id"],
-          contractAddress: rugPullResult["address"],
-          deployerAddress: rugPullResult["deployer_addr"],
-          creationTime: rugPullResult["created_at"],
-          contractName: rugPullResult["name"],
-          tokenSymbol: rugPullResult["symbol"],
-          exploitId: rugPullResult["exploits"][0]["id"].toString(),
-          exploitName: rugPullResult["exploits"][0]["name"],
-          exploitType: rugPullResult["exploits"][0]["types"],
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId: exploitId.toString(),
+          exploitName,
+          exploitType,
         },
       }),
     ],
@@ -104,12 +113,27 @@ function createFalsePositiveFinding(
   labelMetadata: RugPullResult,
   labelExploit: Exploit
 ): Finding {
+  const {
+    chain_id: chainId,
+    address: contractAddress,
+    deployer_addr: deployerAddress,
+    name: contractName,
+    symbol: tokenSymbol,
+    created_at: creationTime,
+    exploits,
+  }: RugPullResult = labelMetadata;
+  const { id: exploitId, name: exploitName, types: exploitType }: Exploit = exploits[0];
+  const resultString: string = chainId + contractAddress + deployerAddress + contractName + tokenSymbol;
+  const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
+
   return Finding.fromObject({
     name: `False positive rug pull contract, and its deployer, previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
     description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]}, and its deployer ${falsePositiveEntry["deployerAddress"]}, a rug pull`,
     alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE",
     severity: FindingSeverity.Info,
     type: FindingType.Info,
+    // uniqueKey,
+    // source: { chainSource: { chainId: Number(labelMetadata.chainId) } },
     metadata: {},
     labels: [
       Label.fromObject({
@@ -119,15 +143,15 @@ function createFalsePositiveFinding(
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId: labelMetadata.chain_id,
-          contractAddress: labelMetadata.address,
-          deployerAddress: labelMetadata.deployer_addr,
-          creationTime: labelMetadata.created_at,
-          contractName: labelMetadata.name,
-          tokenSymbol: labelMetadata.symbol,
-          exploitId: labelExploit.id.toString(),
-          exploitName: labelExploit.name,
-          exploitType: labelExploit.types,
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId: exploitId.toString(),
+          exploitName,
+          exploitType,
         },
       }),
       Label.fromObject({
@@ -137,15 +161,15 @@ function createFalsePositiveFinding(
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId: labelMetadata.chain_id,
-          contractAddress: labelMetadata.address,
-          deployerAddress: labelMetadata.deployer_addr,
-          creationTime: labelMetadata.created_at,
-          contractName: labelMetadata.name,
-          tokenSymbol: labelMetadata.symbol,
-          exploitId: labelExploit.id.toString(),
-          exploitName: labelExploit.name,
-          exploitType: labelExploit.types,
+          chainId,
+          contractAddress,
+          deployerAddress,
+          creationTime,
+          contractName,
+          tokenSymbol,
+          exploitId: exploitId.toString(),
+          exploitName,
+          exploitType,
         },
       }),
     ],
