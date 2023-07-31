@@ -32,6 +32,7 @@
     "csv": "^6.3.1",
     "csv-parse": "^5.4.0",
     "forta-agent": "^0.1.33",
+    "node-fetch": "^2.6.9",
     "ws": "^8.13.0"
   },
   "devDependencies": {

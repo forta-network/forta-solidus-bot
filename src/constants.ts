@@ -7,12 +7,4 @@ export const BOT_ID: string = "0x1ae0e0734a5d2b4ab26b8f63b5c323cceb8ecf9ac16d127
 
 export const MAX_RUG_PULL_RESULTS_PER_BLOCK: number = 50;
 
-// `123` URL for testing
-export const WEBSOCKET_URL: string = "ws://localhost:1234";
-// PROD URL
-// export const WEBSOCKET_URL = "";
-
-// `abcxyz` for testing
-export const API_KEY: string = "abcxyz";
-// PROD API KEY
-// export const API_KEY: string = "";
+export const DATABASE_URL = "https://research.forta.network/database/scanner/secrets.json";

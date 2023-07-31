@@ -1,11 +1,20 @@
-import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
+import {
+  Initialize,
+  setPrivateFindings,
+  HandleTransaction,
+  TransactionEvent,
+  Finding,
+  Label,
+  fetchJwt,
+} from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, WEBSOCKET_URL, API_KEY } from "./constants";
+import fetch from "node-fetch";
+import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH, DATABASE_URL } from "./constants";
 import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
 import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
 import { fetchLabels, fetchFalsePositiveList } from "./utils";
 
-let webSocket: WebSocket = new WebSocket(WEBSOCKET_URL, "", { headers: { apiKey: API_KEY } });
+let webSocket: WebSocket;
 // Bots are allocated 1GB of memory, so storing
 // `RugPullResult`s won't be an issue. Especially
 // since entries will be cleared after alerted.
@@ -13,7 +22,31 @@ const unalertedRugPullResults: RugPullResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
 
-function establishNewWebSocketClient(ws: WebSocket) {
+async function fetchWebSocketInfo(): Promise<string> {
+  const token = await fetchJwt({});
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const response = await fetch(`${DATABASE_URL}`, { headers });
+
+    if (response.ok) {
+      const data: string = await response.text();
+      return data;
+    } else {
+      console.log(`database has no entry`);
+      return "";
+    }
+  } catch (e) {
+    console.log("Error in fetching data.");
+    throw e;
+  }
+}
+
+async function createNewWebSocket(): Promise<WebSocket> {
+  const webSocketUrl: string = await fetchWebSocketInfo();
+  return new WebSocket(webSocketUrl /*, "", { headers: { apiKey: API_KEY } }*/);
+}
+
+async function establishNewWebSocketClient(ws: WebSocket) {
   ws.onopen = () => {
     isWebSocketConnected = true;
     console.log("WebSocket connection opened.");
@@ -39,21 +72,23 @@ function establishNewWebSocketClient(ws: WebSocket) {
   isWebSocketConnected = true;
 }
 
-export function provideInitialize(ws: WebSocket): Initialize {
+export function provideInitialize(webSocketCreator: () => Promise<WebSocket>): Initialize {
   return async () => {
     setPrivateFindings(true);
-    establishNewWebSocketClient(ws);
+    webSocket = await webSocketCreator();
+    await establishNewWebSocketClient(webSocket);
   };
 }
 
 export function provideHandleTransaction(
+  webSocketCreator: () => Promise<WebSocket>,
   falsePositiveListUrl: string,
   labelFetcher: (falsePositiveEntry: FalsePositiveEntry) => Promise<Label[]>
 ): HandleTransaction {
   return async (txEvent: TransactionEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
-      webSocket = new WebSocket(WEBSOCKET_URL, "", { headers: { apikey: API_KEY } });
-      establishNewWebSocketClient(webSocket);
+      webSocket = await webSocketCreator();
+      await establishNewWebSocketClient(webSocket);
     }
 
     const findings: Finding[] = [];
@@ -84,8 +119,8 @@ export function provideHandleTransaction(
 }
 
 export default {
-  initialize: provideInitialize(webSocket),
-  handleTransaction: provideHandleTransaction(FP_CSV_PATH, fetchLabels),
+  initialize: provideInitialize(createNewWebSocket),
+  handleTransaction: provideHandleTransaction(createNewWebSocket, FP_CSV_PATH, fetchLabels),
   provideInitialize,
   provideHandleTransaction,
 };

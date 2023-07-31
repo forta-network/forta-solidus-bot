@@ -1,13 +1,21 @@
 import { Finding, FindingType, FindingSeverity, Label, EntityType } from "forta-agent";
+import { utils } from "ethers";
 import { RugPullResult, FalsePositiveEntry } from "./types";
 
 export function createRugPullFinding(rugPullResult: RugPullResult): Finding {
+  const { chain_id, address, deployer_addr, name, symbol, created_at }: RugPullResult = rugPullResult;
+  const resultString: string = chain_id + address + deployer_addr + name + symbol + created_at;
+  const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
+
   return Finding.fromObject({
     name: `Rug pull contract detected: ${rugPullResult["name"]}`,
     description: rugPullResult["exploits"][0]["name"],
     alertId: "SOLIDUS-RUG-PULL",
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
+    // uniqueKey,
+    // source: { chainSource: { chainId: Number(rugPullResult["chain_id"]) } },
+
     metadata: {
       chainId: rugPullResult["chain_id"],
       deployerAddress: rugPullResult["deployer_addr"],

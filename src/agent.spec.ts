@@ -7,9 +7,16 @@ import WS from "jest-websocket-mock";
 import fs from "fs";
 import { parse, Parser } from "csv-parse";
 import { finished } from "stream/promises";
+import { utils } from "ethers";
 import { provideInitialize, provideHandleTransaction } from "./agent";
 import { Exploit, RugPullPayload, RugPullResult, FalsePositiveEntry } from "./types";
 import { createMockRugPullResults, createFetchedLabels } from "./mock.data";
+
+const mockWebSocketUrl: string = "ws://localhost:1234";
+
+async function mockWebSocketCreator(): Promise<WebSocket> {
+  return new WebSocket(mockWebSocketUrl);
+}
 
 async function mockFpFetcher(csvPath: string): Promise<FalsePositiveEntry[]> {
   const records: FalsePositiveEntry[] = [];
@@ -28,12 +35,18 @@ async function mockFpFetcher(csvPath: string): Promise<FalsePositiveEntry[]> {
 }
 
 function createRugPullFinding(rugPullResult: RugPullResult): Finding {
+  const { chain_id, address, deployer_addr, name, symbol, created_at }: RugPullResult = rugPullResult;
+  const resultString: string = chain_id + address + deployer_addr + name + symbol + created_at;
+  const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
+
   return Finding.fromObject({
     name: `Rug pull contract detected: ${rugPullResult["name"]}`,
     description: rugPullResult["exploits"][0]["name"],
     alertId: "SOLIDUS-RUG-PULL",
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
+    // uniqueKey,
+    // source: { chainSource: { chainId: Number(rugPullResult["chain_id"]) } },
     metadata: {
       chainId: rugPullResult["chain_id"],
       deployerAddress: rugPullResult["deployer_addr"],
@@ -139,25 +152,23 @@ function createFalsePositiveFinding(
   });
 }
 
-describe("Solidus Rug Pull Bot Test Suite", () => {
+describe("Rug Pull Bot Test Suite", () => {
   let mockServer: WS;
   let mockClient: WebSocket;
   const mockLabelFetcher = jest.fn();
   let handleTransaction: HandleTransaction;
   const mockTxEvent = new TestTransactionEvent().setBlock(10);
-  const mockWebSocketUrl: string = "ws://localhost:1234";
-  const mockWebSocketApiKey: string = "abcxyz";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
     mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
-    mockClient = new WebSocket(mockWebSocketUrl, "", { headers: { apikey: mockWebSocketApiKey } });
+    mockClient = await mockWebSocketCreator();
     await mockServer.connected;
 
-    const initialize: Initialize = provideInitialize(mockClient);
+    const initialize: Initialize = provideInitialize(mockWebSocketCreator);
     await initialize();
 
-    handleTransaction = provideHandleTransaction(mockFpCsvPath, mockLabelFetcher);
+    handleTransaction = provideHandleTransaction(mockWebSocketCreator, mockFpCsvPath, mockLabelFetcher);
     const findings = await handleTransaction(mockTxEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
