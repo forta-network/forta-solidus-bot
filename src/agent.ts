@@ -1,21 +1,24 @@
 import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import { MAX_RUG_PULL_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
-import { RugPullResult, RugPullPayload, FalsePositiveEntry } from "./types";
-import { createRugPullFinding, createFalsePositiveFinding } from "./findings";
+import { MAX_SCAM_TOKEN_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
+import { ScamTokenResult, FalsePositiveEntry } from "./types";
+import { createScamTokenFinding, createFalsePositiveFinding } from "./findings";
 import { fetchWebSocketInfo, fetchLabels, fetchFalsePositiveList } from "./utils";
+
+const WEBSOCKET_URL: string = "";
+const API_KEY: string = "";
 
 let webSocket: WebSocket;
 // Bots are allocated 1GB of memory, so storing
-// `RugPullResult`s won't be an issue. Especially
+// `ScamTokenResult`s won't be an issue. Especially
 // since entries will be cleared after alerted.
-const unalertedRugPullResults: RugPullResult[] = [];
+const unalertedScamTokenResults: ScamTokenResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
 
 async function createNewWebSocket(): Promise<WebSocket> {
-  const webSocketUrl: string = await fetchWebSocketInfo();
-  return new WebSocket(webSocketUrl /*, "", { headers: { apiKey: API_KEY } }*/);
+  // const webSocketUrl: string = await fetchWebSocketInfo();
+  return new WebSocket(WEBSOCKET_URL, { headers: { apiKey: API_KEY } });
 }
 
 async function establishNewWebSocketClient(ws: WebSocket) {
@@ -25,10 +28,20 @@ async function establishNewWebSocketClient(ws: WebSocket) {
   };
 
   ws.onmessage = (message: MessageEvent) => {
-    const parsedData: RugPullPayload = JSON.parse(message.data.toString());
-    parsedData.result.forEach((result: RugPullResult) => {
-      unalertedRugPullResults.push(result);
-    });
+    const parsedData = JSON.parse(message.data.toString().replace(/'/g, '"'));
+
+    if (parsedData["status"] === 200) {
+      isWebSocketConnected = true;
+    } else if (parsedData["status"] === 401) {
+      console.log(`Authentication failed: ${message.data}`);
+      isWebSocketConnected = false;
+    } else if (parsedData["chain_id"]) {
+      const newScamTokemEntry: ScamTokenResult = parsedData;
+      unalertedScamTokenResults.push(newScamTokemEntry);
+    } else {
+      console.log(`Unexpected response: ${message.data}`);
+      isWebSocketConnected = false;
+    }
   };
 
   ws.onerror = (error: ErrorEvent) => {
@@ -41,6 +54,7 @@ async function establishNewWebSocketClient(ws: WebSocket) {
     console.log(`WebSocket connection closed. Code: ${event.code}. Reason (could be empty): ${event.reason}`);
   };
 
+  console.log("WebSocket connection established.");
   isWebSocketConnected = true;
 }
 
@@ -80,11 +94,11 @@ export function provideHandleTransaction(
       );
     }
 
-    const resultsToBeProcessed: RugPullResult[] = unalertedRugPullResults.splice(
+    const resultsToBeProcessed: ScamTokenResult[] = unalertedScamTokenResults.splice(
       0,
-      Math.min(unalertedRugPullResults.length, MAX_RUG_PULL_RESULTS_PER_BLOCK)
+      Math.min(unalertedScamTokenResults.length, MAX_SCAM_TOKEN_RESULTS_PER_BLOCK)
     );
-    findings.push(...resultsToBeProcessed.map(createRugPullFinding));
+    findings.push(...resultsToBeProcessed.map(createScamTokenFinding));
 
     return findings;
   };

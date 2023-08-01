@@ -32,7 +32,7 @@ export async function fetchLabels(falsePositiveEntry: FalsePositiveEntry): Promi
   while (hasNext) {
     const results: LabelsResponse = await getLabels({
       entities: [falsePositiveEntry["contractAddress"], falsePositiveEntry["deployerAddress"]],
-      labels: ["Rug pull contract", "Rug pull contract deployer"],
+      labels: ["Scam token contract", "Scam token contract deployer"],
       sourceIds: [BOT_ID],
       entityType: "Address",
     });

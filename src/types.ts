@@ -4,7 +4,7 @@ export type Exploit = {
   types: string;
 };
 
-export type RugPullResult = {
+export type ScamTokenResult = {
   chain_id: string;
   address: string;
   deployer_addr: string;
@@ -12,12 +12,6 @@ export type RugPullResult = {
   symbol: string;
   created_at: string;
   exploits: Exploit[];
-};
-
-export type RugPullPayload = {
-  message: string;
-  total: number;
-  result: RugPullResult[];
 };
 
 export type FalsePositiveEntry = {

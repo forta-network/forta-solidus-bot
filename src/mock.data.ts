@@ -1,9 +1,9 @@
 import { Label, EntityType } from "forta-agent";
 import { createAddress } from "forta-agent-tools";
-import { RugPullResult, RugPullPayload } from "./types";
+import { ScamTokenResult } from "./types";
 
-function createSingleRugPullResult(identifier: number): RugPullResult {
-  const rugPullResult: RugPullResult = {
+function createSingleScamTokenResult(identifier: number): ScamTokenResult {
+  const ScamTokenResult: ScamTokenResult = {
     chain_id: "56",
     address: createAddress(`0x${identifier}0`),
     deployer_addr: createAddress(`0x${identifier}${identifier}`),
@@ -19,74 +19,83 @@ function createSingleRugPullResult(identifier: number): RugPullResult {
     ],
   };
 
-  return rugPullResult;
+  return ScamTokenResult;
 }
 
-export function createMockRugPullResults(amount: number): RugPullPayload {
-  const rugPullPayload: RugPullPayload = {
-    message: "OK",
-    total: amount,
-    result: [],
-  };
+export function createMockScamTokenResults(amount: number): ScamTokenResult[] {
+  const ScamTokenPayload: ScamTokenResult[] = [];
 
   for (let i = 1; i <= amount; i++) {
-    rugPullPayload["result"].push(createSingleRugPullResult(i));
+    ScamTokenPayload.push(createSingleScamTokenResult(i));
   }
 
-  return rugPullPayload;
+  return ScamTokenPayload;
 }
 
 export function createFetchedLabels(
-  chainId: string,
-  contractAddress: string,
-  deployerAddress: string,
-  creationTime: string,
-  contractName: string,
-  tokenSymbol: string,
-  exploitId: string,
-  exploitName: string,
-  exploitType: string,
-  contractLabel: string,
-  deployerLabel: string
+  chain_id: string,
+  address: string,
+  deployer_addr: string,
+  created_at: string,
+  name: string,
+  symbol: string,
+  exploit_id: string,
+  exploit_name: string,
+  exploit_type: string,
+  contract_label: string,
+  deployer_label: string
 ): Label[] {
   const labels: Label[] = [
     {
-      entity: contractAddress,
+      entity: address,
       entityType: EntityType.Address,
-      label: contractLabel,
+      label: contract_label,
       confidence: 0.99,
       remove: false,
       metadata: {
-        chainId,
-        contractAddress,
-        deployerAddress,
-        creationTime,
-        contractName,
-        tokenSymbol,
-        exploitId,
-        exploitName,
-        exploitType,
+        chain_id,
+        address,
+        deployer_addr,
+        created_at,
+        name,
+        symbol,
+        exploit_id,
+        exploit_name,
+        exploit_type,
       },
     },
     {
-      entity: deployerAddress,
+      entity: deployer_addr,
       entityType: EntityType.Address,
-      label: deployerLabel,
+      label: deployer_label,
       confidence: 0.99,
       remove: false,
       metadata: {
-        chainId,
-        contractAddress,
-        deployerAddress,
-        creationTime,
-        contractName,
-        tokenSymbol,
-        exploitId,
-        exploitName,
-        exploitType,
+        chain_id,
+        address,
+        deployer_addr,
+        created_at,
+        name,
+        symbol,
+        exploit_id,
+        exploit_name,
+        exploit_type,
       },
     },
   ];
 
   return labels;
 }
+
+/*
+metadata: {
+  ,
+  ,
+  ,
+  ,
+  ,
+  ,
+  ,
+  ,
+}
+*/
