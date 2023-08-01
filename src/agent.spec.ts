@@ -1,175 +1,186 @@
-import { Initialize, HandleBlock, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
-import { TestBlockEvent } from "forta-agent-tools/lib/test";
+import { Initialize, HandleTransaction, Finding, FindingSeverity, FindingType, Label, EntityType } from "forta-agent";
+import { createAddress } from "forta-agent-tools";
+import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import { when } from "jest-when";
-import WS from "jest-websocket-mock";
 import WebSocket from "ws";
-import { provideInitialize, provideHandleBlock } from "./agent";
-import { RugPullPayload, RugPullResult, FalsePositiveInfo } from "./types";
-import { createMockRugPullResults, mockFpDb, createFetchedLabels } from "./mock.data";
+import WS from "jest-websocket-mock";
+import fs from "fs";
+import { parse, Parser } from "csv-parse";
+import { finished } from "stream/promises";
+import { utils } from "ethers";
+import { provideInitialize, provideHandleTransaction } from "./agent";
+import { Exploit, ScamTokenResult, FalsePositiveEntry } from "./types";
+import { createMockScamTokenResults, createFetchedLabels } from "./mock.data";
 
-function createRugPullFinding(rugPullResult: RugPullResult): Finding {
+const mockWebSocketUrl: string = "ws://localhost:1234";
+
+async function mockWebSocketCreator(): Promise<WebSocket> {
+  return new WebSocket(mockWebSocketUrl);
+}
+
+async function mockFpFetcher(csvPath: string): Promise<FalsePositiveEntry[]> {
+  const records: FalsePositiveEntry[] = [];
+
+  const parser: Parser = fs.createReadStream(csvPath).pipe(parse({ columns: true }));
+
+  parser.on("readable", function () {
+    let record: FalsePositiveEntry;
+    while ((record = parser.read()) !== null) {
+      records.push(record);
+    }
+  });
+
+  await finished(parser);
+  return records;
+}
+
+function createScamTokenFinding(scamTokenResult: ScamTokenResult): Finding {
+  const { chain_id, address, deployer_addr, name, symbol, created_at, exploits }: ScamTokenResult = scamTokenResult;
+  const { id: exploit_id, name: exploit_name, types: exploit_type }: Exploit = exploits[0];
+  const resultString: string = chain_id + address + deployer_addr + name + symbol + created_at;
+  const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
+
   return Finding.fromObject({
-    name: `Rug pull contract detected: ${rugPullResult["name"]}`,
-    description: rugPullResult["exploits"][0]["name"],
-    alertId: "SOLIDUS-RUG-PULL",
+    name: `Scam token contract detected: ${name}`,
+    description: exploit_name,
+    alertId: "SCAM-TOKEN-NEW",
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
+    uniqueKey,
+    source: { chainSource: { chainId: Number(chain_id) } },
+    addresses: [address, deployer_addr],
+    protocol: name,
     metadata: {
-      chainId: rugPullResult["chain_id"],
-      deployerAddress: rugPullResult["deployer_addr"],
-      createdAddress: rugPullResult["address"],
-      creationTime: rugPullResult["created_at"],
-      contractName: rugPullResult["name"],
-      tokenSymbol: rugPullResult["symbol"],
-      exploitId: rugPullResult["exploits"][0]["id"].toString(),
-      exploitName: rugPullResult["exploits"][0]["name"],
-      exploitType: rugPullResult["exploits"][0]["types"],
+      chain_id,
+      deployer_addr,
+      address,
+      created_at,
+      name,
+      symbol,
+      exploit_id: exploit_id.toString(),
+      exploit_name,
+      exploit_type,
     },
     labels: [
       Label.fromObject({
-        entity: rugPullResult["address"],
+        entity: address,
         entityType: EntityType.Address,
-        label: "Rug pull contract",
+        label: "Scam token contract",
         confidence: 0.99,
         remove: false,
         metadata: {
-          chainId: rugPullResult["chain_id"],
-          contractAddress: rugPullResult["address"],
-          deployerAddress: rugPullResult["deployer_addr"],
-          creationTime: rugPullResult["created_at"],
-          contractName: rugPullResult["name"],
-          tokenSymbol: rugPullResult["symbol"],
-          exploitId: rugPullResult["exploits"][0]["id"].toString(),
-          exploitName: rugPullResult["exploits"][0]["name"],
-          exploitType: rugPullResult["exploits"][0]["types"],
+          chain_id,
+          address,
+          deployer_addr,
+          created_at,
+          name,
+          symbol,
+          exploit_id: exploit_id.toString(),
+          exploit_name,
+          exploit_type,
         },
       }),
       Label.fromObject({
-        entity: rugPullResult["deployer_addr"],
+        entity: deployer_addr,
         entityType: EntityType.Address,
-        label: "Rug pull contract deployer",
+        label: "Scam token contract deployer",
         confidence: 0.99,
         remove: false,
         metadata: {
-          chainId: rugPullResult["chain_id"],
-          contractAddress: rugPullResult["address"],
-          deployerAddress: rugPullResult["deployer_addr"],
-          creationTime: rugPullResult["created_at"],
-          contractName: rugPullResult["name"],
-          tokenSymbol: rugPullResult["symbol"],
-          exploitId: rugPullResult["exploits"][0]["id"].toString(),
-          exploitName: rugPullResult["exploits"][0]["name"],
-          exploitType: rugPullResult["exploits"][0]["types"],
+          chain_id,
+          address,
+          deployer_addr,
+          created_at,
+          name,
+          symbol,
+          exploit_id: exploit_id.toString(),
+          exploit_name,
+          exploit_type,
         },
       }),
     ],
   });
 }
 
-function createContractFalsePositiveFinding(
-  falsePositiveEntry: FalsePositiveInfo,
-  chainId: string,
-  contractAddress: string,
-  deployerAddress: string,
-  creationTime: string,
-  contractName: string,
-  tokenSymbol: string,
-  exploitId: string,
-  exploitName: string,
-  exploitType: string
+function createFalsePositiveFinding(
+  falsePositiveEntry: FalsePositiveEntry,
+  labelMetadata: ScamTokenResult,
+  labelExploit: Exploit
 ): Finding {
+  const { chain_id, address, deployer_addr, name, symbol, created_at }: ScamTokenResult = labelMetadata;
+  const { id: exploit_id, name: exploit_name, types: exploit_type }: Exploit = labelExploit;
+  // Exclude `creationTime` from `resultString` to
+  // not create exact same `uniqueKey` as other Finding
+  const resultString: string = chain_id + address + deployer_addr + name + symbol;
+  const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
+
   return Finding.fromObject({
-    name: `False positive rug pull contract previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
-    description: `Rug pull detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]} a rug pull`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-CONTRACT",
+    name: `False positive scam token contract, and its deployer, previously incorrectly labeled: ${falsePositiveEntry["contractName"]}`,
+    description: `Scam token detector previously labeled ${falsePositiveEntry["contractName"]} contract at ${falsePositiveEntry["contractAddress"]}, and its deployer ${falsePositiveEntry["deployerAddress"]}, a scam token`,
+    alertId: "SCAM-TOKEN-FALSE-POSITIVE",
     severity: FindingSeverity.Info,
     type: FindingType.Info,
+    uniqueKey,
+    source: { chainSource: { chainId: Number(chain_id) } },
     metadata: {},
     labels: [
       Label.fromObject({
         entity: falsePositiveEntry["contractAddress"],
         entityType: EntityType.Address,
-        label: "Rug pull contract",
+        label: "Scam token contract",
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId,
-          contractAddress,
-          deployerAddress,
-          creationTime,
-          contractName,
-          tokenSymbol,
-          exploitId,
-          exploitName,
-          exploitType,
+          chain_id,
+          address,
+          deployer_addr,
+          created_at,
+          name,
+          symbol,
+          exploit_id: exploit_id.toString(),
+          exploit_name,
+          exploit_type,
         },
       }),
-    ],
-  });
-}
-
-function createDeployerFalsePositiveFinding(
-  falsePositiveEntry: FalsePositiveInfo,
-  chainId: string,
-  contractAddress: string,
-  deployerAddress: string,
-  creationTime: string,
-  contractName: string,
-  tokenSymbol: string,
-  exploitId: string,
-  exploitName: string,
-  exploitType: string
-): Finding {
-  return Finding.fromObject({
-    name: "False positive rug pull contract deployer previously incorrectly labeled",
-    description: `Rug pull detector previously labeled ${falsePositiveEntry["deployerAddress"]} a rug pull deployer`,
-    alertId: "SOLIDUS-RUG-PULL-FALSE-POSITIVE-DEPLOYER",
-    severity: FindingSeverity.Info,
-    type: FindingType.Info,
-    metadata: {},
-    labels: [
       Label.fromObject({
         entity: falsePositiveEntry["deployerAddress"],
         entityType: EntityType.Address,
-        label: "Rug pull contract deployer",
+        label: "Scam token contract deployer",
         confidence: 0.99,
         remove: true,
         metadata: {
-          chainId,
-          contractAddress,
-          deployerAddress,
-          creationTime,
-          contractName,
-          tokenSymbol,
-          exploitId,
-          exploitName,
-          exploitType,
+          chain_id,
+          address,
+          deployer_addr,
+          created_at,
+          name,
+          symbol,
+          exploit_id: exploit_id.toString(),
+          exploit_name,
+          exploit_type,
         },
       }),
     ],
   });
 }
 
-describe("Solidus Rug Pull Bot Test Suite", () => {
+describe("Scam Token Bot Test Suite", () => {
   let mockServer: WS;
-  let mockClient: WebSocket;
-  const mockFpFetcher = jest.fn();
   const mockLabelFetcher = jest.fn();
-  let handleBlock: HandleBlock;
-  const mockBlockEvent = new TestBlockEvent().setNumber(10);
+  let handleTransaction: HandleTransaction;
+  const mockTxEvent = new TestTransactionEvent().setBlock(10);
+  const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
-    mockServer = new WS("ws://localhost:1234", { jsonProtocol: true });
-    mockClient = new WebSocket("ws://localhost:1234");
+    mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
+    await mockWebSocketCreator();
     await mockServer.connected;
 
-    mockFpFetcher.mockReturnValue(mockFpDb);
-
-    const initialize: Initialize = provideInitialize(mockClient);
+    const initialize: Initialize = provideInitialize(mockWebSocketCreator);
     await initialize();
 
-    handleBlock = provideHandleBlock("testFpURL", mockFpFetcher, mockLabelFetcher);
-    const findings = await handleBlock(mockBlockEvent);
+    handleTransaction = provideHandleTransaction(mockWebSocketCreator, mockFpCsvPath, mockLabelFetcher);
+    const findings = await handleTransaction(mockTxEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
   });
@@ -179,190 +190,189 @@ describe("Solidus Rug Pull Bot Test Suite", () => {
   });
 
   it("creates alerts when WebSocket server sends data", async () => {
-    const mockDataThreeResults: RugPullPayload = createMockRugPullResults(3);
-    mockServer.send(mockDataThreeResults);
+    const mockDataThreeResults: ScamTokenResult[] = createMockScamTokenResults(3);
 
-    let findings = await handleBlock(mockBlockEvent);
+    mockDataThreeResults.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
+
+    let findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([
-      createRugPullFinding(mockDataThreeResults["result"][0]),
-      createRugPullFinding(mockDataThreeResults["result"][1]),
-      createRugPullFinding(mockDataThreeResults["result"][2]),
+      createScamTokenFinding(mockDataThreeResults[0]),
+      createScamTokenFinding(mockDataThreeResults[1]),
+      createScamTokenFinding(mockDataThreeResults[2]),
     ]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings since entries were cleared
     expect(findings).toStrictEqual([]);
   });
 
-  it("creates one batch of alerts from different payloads delivered in between blocks", async () => {
-    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
-    const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
+  it("creates different batches of alerts in different transactions from different payloads delivered seperately", async () => {
+    const mockDataOneResult: ScamTokenResult[] = createMockScamTokenResults(1);
+    const mockDataTwoResults: ScamTokenResult[] = createMockScamTokenResults(2);
 
-    mockServer.send(mockDataOneResult);
-    mockServer.send(mockDataTwoResults);
+    mockDataOneResult.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
 
-    let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([
-      createRugPullFinding(mockDataOneResult["result"][0]),
-      createRugPullFinding(mockDataTwoResults["result"][0]),
-      createRugPullFinding(mockDataTwoResults["result"][1]),
-    ]);
+    let findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual([createScamTokenFinding(mockDataOneResult[0])]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
+
+    mockDataTwoResults.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
+
+    findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual([
+      createScamTokenFinding(mockDataTwoResults[0]),
+      createScamTokenFinding(mockDataTwoResults[1]),
+    ]);
   });
 
   it("creates alerts, connection closes, connection re-establishes, and bot creates more alerts", async () => {
     const spy = jest.spyOn(console, "log").mockImplementation(() => {});
-    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
-    const mockDataTwoResults: RugPullPayload = createMockRugPullResults(2);
+    const mockDataOneResult: ScamTokenResult[] = createMockScamTokenResults(1);
+    const mockDataTwoResults: ScamTokenResult[] = createMockScamTokenResults(2);
 
-    mockServer.send(mockDataOneResult);
-    let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
+    mockDataOneResult.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
 
-    findings = await handleBlock(mockBlockEvent);
+    let findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual([createScamTokenFinding(mockDataOneResult[0])]);
+
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
-    mockServer.close();
+    await mockServer.close();
     // Code `1000` since connection was closed "gracefully"
     expect(spy).toHaveBeenCalledWith("WebSocket connection closed. Code: 1000. Reason (could be empty): ");
 
     // Mocking server re-initialization
     // and re-establishing connection
-    mockServer = new WS("ws://localhost:1234", { jsonProtocol: true });
-    findings = await handleBlock(mockBlockEvent);
+    mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since connection only
     // re-established and no data served
     expect(findings).toStrictEqual([]);
 
-    mockServer.send(mockDataTwoResults);
-    findings = await handleBlock(mockBlockEvent);
+    mockDataTwoResults.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
+
+    findings = await handleTransaction(mockTxEvent);
 
     expect(findings).toStrictEqual([
-      createRugPullFinding(mockDataTwoResults["result"][0]),
-      createRugPullFinding(mockDataTwoResults["result"][1]),
+      createScamTokenFinding(mockDataTwoResults[0]),
+      createScamTokenFinding(mockDataTwoResults[1]),
     ]);
   });
 
   it("handles an error when received", async () => {
     const spy = jest.spyOn(console, "log").mockImplementation(() => {});
-    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
+    const mockDataOneResult: ScamTokenResult[] = createMockScamTokenResults(1);
 
-    mockServer.send(mockDataOneResult);
-    let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
+    mockDataOneResult.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
+
+    let findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual([createScamTokenFinding(mockDataOneResult[0])]);
 
     mockServer.error();
     expect(spy).toHaveBeenCalledWith("WebSocket connection errored out. Type: error.");
   });
 
   it("creates an alert for an address then creates a false positive alert for that address that was a false positive", async () => {
-    const mockDataOneResult: RugPullPayload = createMockRugPullResults(1);
+    const mockDataOneResult: ScamTokenResult[] = createMockScamTokenResults(1);
+
     when(mockLabelFetcher)
-      .calledWith(mockDataOneResult["result"][0]["address"], "Rug pull contract")
+      .calledWith({
+        contractName: "mockOne",
+        contractAddress: createAddress("0x10"),
+        chainId: "1",
+        deployerAddress: createAddress("0x11"),
+        comment: "Not scam token",
+      })
       .mockReturnValue(
         createFetchedLabels(
-          mockDataOneResult["result"][0]["chain_id"],
-          mockDataOneResult["result"][0]["address"],
-          mockDataOneResult["result"][0]["deployer_addr"],
-          mockDataOneResult["result"][0]["created_at"],
-          mockDataOneResult["result"][0]["name"],
-          mockDataOneResult["result"][0]["symbol"],
-          mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-          mockDataOneResult["result"][0]["exploits"][0]["name"],
-          mockDataOneResult["result"][0]["exploits"][0]["types"],
-          "Rug pull contract"
-        )
-      )
-      .calledWith(mockDataOneResult["result"][0]["deployer_addr"], "Rug pull contract deployer")
-      .mockReturnValue(
-        createFetchedLabels(
-          mockDataOneResult["result"][0]["chain_id"],
-          mockDataOneResult["result"][0]["address"],
-          mockDataOneResult["result"][0]["deployer_addr"],
-          mockDataOneResult["result"][0]["created_at"],
-          mockDataOneResult["result"][0]["name"],
-          mockDataOneResult["result"][0]["symbol"],
-          mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-          mockDataOneResult["result"][0]["exploits"][0]["name"],
-          mockDataOneResult["result"][0]["exploits"][0]["types"],
-          "Rug pull contract deployer"
+          mockDataOneResult[0]["chain_id"],
+          mockDataOneResult[0]["address"],
+          mockDataOneResult[0]["deployer_addr"],
+          mockDataOneResult[0]["created_at"],
+          mockDataOneResult[0]["name"],
+          mockDataOneResult[0]["symbol"],
+          mockDataOneResult[0]["exploits"][0]["id"].toString(),
+          mockDataOneResult[0]["exploits"][0]["name"],
+          mockDataOneResult[0]["exploits"][0]["types"],
+          "Scam token contract",
+          "Scam token contract deployer"
         )
       );
 
-    mockServer.send(mockDataOneResult);
+    mockDataOneResult.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
+    });
 
-    let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual([createRugPullFinding(mockDataOneResult["result"][0])]);
+    let findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual([createScamTokenFinding(mockDataOneResult[0])]);
 
-    findings = await handleBlock(mockBlockEvent);
+    findings = await handleTransaction(mockTxEvent);
     // No findings, since entries were cleared
     expect(findings).toStrictEqual([]);
 
-    mockBlockEvent.setNumber(300);
-    findings = await handleBlock(mockBlockEvent);
+    mockTxEvent.setBlock(300);
+    findings = await handleTransaction(mockTxEvent);
 
-    console.log(`findings in test: ${JSON.stringify(findings)}`);
+    const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
 
-    const mockFpValues: FalsePositiveInfo[] = Object.values(mockFpDb);
     expect(findings).toStrictEqual([
-      createContractFalsePositiveFinding(
-        mockFpValues[0],
-        mockDataOneResult["result"][0]["chain_id"],
-        mockDataOneResult["result"][0]["address"],
-        mockDataOneResult["result"][0]["deployer_addr"],
-        mockDataOneResult["result"][0]["created_at"],
-        mockDataOneResult["result"][0]["name"],
-        mockDataOneResult["result"][0]["symbol"],
-        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-        mockDataOneResult["result"][0]["exploits"][0]["name"],
-        mockDataOneResult["result"][0]["exploits"][0]["types"]
-      ),
-      createDeployerFalsePositiveFinding(
-        mockFpValues[0],
-        mockDataOneResult["result"][0]["chain_id"],
-        mockDataOneResult["result"][0]["address"],
-        mockDataOneResult["result"][0]["deployer_addr"],
-        mockDataOneResult["result"][0]["created_at"],
-        mockDataOneResult["result"][0]["name"],
-        mockDataOneResult["result"][0]["symbol"],
-        mockDataOneResult["result"][0]["exploits"][0]["id"].toString(),
-        mockDataOneResult["result"][0]["exploits"][0]["name"],
-        mockDataOneResult["result"][0]["exploits"][0]["types"]
-      ),
+      createFalsePositiveFinding(mockFpValues[0], mockDataOneResult[0], mockDataOneResult[0]["exploits"][0]),
     ]);
 
-    mockBlockEvent.setNumber(600);
-    findings = await handleBlock(mockBlockEvent);
+    mockTxEvent.setBlock(600);
+    findings = await handleTransaction(mockTxEvent);
     // FP Finding should not be created for
     // previous fetched Label
     expect(findings).toStrictEqual([]);
   });
 
+  // There is a limit of 250KB for pushed findings,
+  // but that would be more than 50 findings.
+  // Therefore, this test indirectly tests to confirm
+  // we aren't attempting to push more than
+  // 250 KB worth of findings either.
   it("creates alerts up to the 50 alert limit then creates the rest in the subsequent block", async () => {
-    const mockDataSixtyFiveResults: RugPullPayload = createMockRugPullResults(65);
-    mockServer.send(mockDataSixtyFiveResults);
+    const mockDataSixtyFiveResults: ScamTokenResult[] = createMockScamTokenResults(65);
 
-    const firstFiftyRugPullFindings: Finding[] = [];
-    mockDataSixtyFiveResults["result"].slice(0, 50).forEach((result) => {
-      firstFiftyRugPullFindings.push(createRugPullFinding(result));
+    mockDataSixtyFiveResults.forEach((result: ScamTokenResult) => {
+      mockServer.send(result);
     });
 
-    let findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual(firstFiftyRugPullFindings);
-
-    const remainingFifteenRugPullFindings: Finding[] = [];
-    mockDataSixtyFiveResults["result"].slice(50).forEach((result) => {
-      remainingFifteenRugPullFindings.push(createRugPullFinding(result));
+    const firstFiftyScamTokenFindings: Finding[] = [];
+    mockDataSixtyFiveResults.slice(0, 50).forEach((result: ScamTokenResult) => {
+      firstFiftyScamTokenFindings.push(createScamTokenFinding(result));
     });
 
-    // Bot saved the "overflowing" 15 rug pull results
-    findings = await handleBlock(mockBlockEvent);
-    expect(findings).toStrictEqual(remainingFifteenRugPullFindings);
+    mockTxEvent.setBlock(10);
+    let findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual(firstFiftyScamTokenFindings);
 
-    findings = await handleBlock(mockBlockEvent);
+    const remainingFifteenScamTokenFindings: Finding[] = [];
+    mockDataSixtyFiveResults.slice(50).forEach((result: ScamTokenResult) => {
+      remainingFifteenScamTokenFindings.push(createScamTokenFinding(result));
+    });
+
+    // Bot saved the "overflowing" 15 scam token results
+    findings = await handleTransaction(mockTxEvent);
+    expect(findings).toStrictEqual(remainingFifteenScamTokenFindings);
+
+    findings = await handleTransaction(mockTxEvent);
     expect(findings).toStrictEqual([]);
   });
 });

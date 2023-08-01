@@ -1,10 +1,10 @@
-type Exploit = {
+export type Exploit = {
   id: number;
   name: string;
   types: string;
 };
 
-export type RugPullResult = {
+export type ScamTokenResult = {
   chain_id: string;
   address: string;
   deployer_addr: string;
@@ -14,19 +14,15 @@ export type RugPullResult = {
   exploits: Exploit[];
 };
 
-export type RugPullPayload = {
-  message: string;
-  total: number;
-  result: RugPullResult[];
-};
-
-export type FalsePositiveInfo = {
+export type FalsePositiveEntry = {
   contractName: string;
   contractAddress: string;
   deployerAddress: string;
+  chainId: string;
   comment: string;
 };
 
-export type FalsePositiveDatabase = {
-  [key: string]: FalsePositiveInfo;
+export type WebSocketInfo = {
+  WEBSOCKET_URL: string;
+  WEBSOCKET_API_KEY: string;
 };

@@ -1,68 +1,44 @@
-import {
-  Initialize,
-  setPrivateFindings,
-  BlockEvent,
-  HandleBlock,
-  Finding,
-  getLabels,
-  LabelsResponse,
-  Label
-} from "forta-agent";
+import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import axios from "axios";
-import { RugPullResult, RugPullPayload, FalsePositiveInfo, FalsePositiveDatabase } from "./types";
-import {
-  createRugPullFinding,
-  createContractFalsePositiveFinding,
-  createDeployerFalsePositiveFinding,
-} from "./findings";
+import { MAX_SCAM_TOKEN_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
+import { ScamTokenResult, FalsePositiveEntry, WebSocketInfo } from "./types";
+import { createScamTokenFinding, createFalsePositiveFinding } from "./findings";
+import { fetchWebSocketInfo, fetchLabels, fetchFalsePositiveList } from "./utils";
 
-// `123` URL for testing
-const WEBSOCKET_URL: string = "ws://localhost:1234";
-// PROD URL
-// const WEBSOCKET_URL = "";
-const FP_DB_URL: string = "https://raw.githubusercontent.com/forta-network/forta-solidus-bot/main/false.positive.database.json";
-const BOT_ID: string = "0x1ae0e0734a5d2b4ab26b8f63b5c323cceb8ecf9ac16d1276fcb399be0923567a";
-const MAX_RUG_PULL_RESULTS_PER_BLOCK: number = 50;
-
-// const ws: WebSocket = new WebSocket(WEBSOCKET_URL);
-const unalertedRugPullResults: RugPullResult[] = [];
+let webSocket: WebSocket;
+// Bots are allocated 1GB of memory, so storing
+// `ScamTokenResult`s won't be an issue. Especially
+// since entries will be cleared after alerted.
+const unalertedScamTokenResults: ScamTokenResult[] = [];
 const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
 
-async function fetchLabels(entityAddress: string, entityLabel: string): Promise<Label[]> {
-  const labels: Label[] = [];
-  let hasNext = true;
-
-  while (hasNext) {
-    const results: LabelsResponse = await getLabels({
-      entities: [entityAddress],
-      labels: [entityLabel],
-      sourceIds: [BOT_ID],
-      entityType: "Address",
-    });
-
-    hasNext = results.pageInfo.hasNextPage;
-
-    results.labels.forEach((label: Label) => {
-      labels.push(label);
-    });
-  }
-
-  return labels;
+async function createNewWebSocket(): Promise<WebSocket> {
+  const { WEBSOCKET_URL, WEBSOCKET_API_KEY }: WebSocketInfo = await fetchWebSocketInfo();
+  return new WebSocket(WEBSOCKET_URL, { headers: { apiKey: WEBSOCKET_API_KEY } });
 }
 
-function establishNewWebSocketClient(ws: WebSocket) {
+async function establishNewWebSocketClient(ws: WebSocket) {
   ws.onopen = () => {
     isWebSocketConnected = true;
     console.log("WebSocket connection opened.");
   };
 
   ws.onmessage = (message: MessageEvent) => {
-    const parsedData: RugPullPayload = JSON.parse(message.data.toString());
-    parsedData.result.forEach((result: RugPullResult) => {
-      unalertedRugPullResults.push(result);
-    });
+    const parsedData = JSON.parse(message.data.toString().replace(/'/g, '"'));
+
+    if (parsedData["status"] === 200) {
+      isWebSocketConnected = true;
+    } else if (parsedData["status"] === 401) {
+      console.log(`Authentication failed: ${message.data}`);
+      isWebSocketConnected = false;
+    } else if (parsedData["chain_id"]) {
+      const newScamTokemEntry: ScamTokenResult = parsedData;
+      unalertedScamTokenResults.push(newScamTokemEntry);
+    } else {
+      console.log(`Unexpected response: ${message.data}`);
+      isWebSocketConnected = false;
+    }
   };
 
   ws.onerror = (error: ErrorEvent) => {
@@ -75,103 +51,59 @@ function establishNewWebSocketClient(ws: WebSocket) {
     console.log(`WebSocket connection closed. Code: ${event.code}. Reason (could be empty): ${event.reason}`);
   };
 
+  console.log("WebSocket connection established.");
   isWebSocketConnected = true;
 }
 
-async function fetchFalsePositiveList(falsePositiveDbUrl: string): Promise<FalsePositiveDatabase> {
-  const retryCount = 3;
-  let falsePositiveDb = {};
-
-  for (let i = 0; i <= retryCount; i++) {
-    try {
-      falsePositiveDb = (await axios.get(falsePositiveDbUrl)).data;
-      break;
-    } catch (e) {
-      if(i === retryCount) {
-        console.log("Error fetching false positive database.");
-      }
-    }
-  }
-
-  return falsePositiveDb;
-}
-
-export function provideInitialize(ws: WebSocket): Initialize {
+export function provideInitialize(webSocketCreator: () => Promise<WebSocket>): Initialize {
   return async () => {
     setPrivateFindings(true);
-    establishNewWebSocketClient(ws);
+    webSocket = await webSocketCreator();
+    await establishNewWebSocketClient(webSocket);
   };
 }
 
-export function provideHandleBlock(
-  falsePositiveDbUrl: string,
-  falsePositiveFetcher: (url: string) => Promise<FalsePositiveDatabase>,
-  labelFetcher: (entityAddress: string, entityLabel: string) => Promise<Label[]>
-): HandleBlock {
-  return async (blockEvent: BlockEvent): Promise<Finding[]> => {
+export function provideHandleTransaction(
+  webSocketCreator: () => Promise<WebSocket>,
+  falsePositiveListUrl: string,
+  labelFetcher: (falsePositiveEntry: FalsePositiveEntry) => Promise<Label[]>
+): HandleTransaction {
+  return async (txEvent: TransactionEvent): Promise<Finding[]> => {
     if (!isWebSocketConnected) {
-      establishNewWebSocketClient(new WebSocket(WEBSOCKET_URL));
+      webSocket = await webSocketCreator();
+      await establishNewWebSocketClient(webSocket);
     }
 
     const findings: Finding[] = [];
 
-    if (blockEvent.blockNumber % 300 == 0) {
-      const falsePositiveDb: FalsePositiveDatabase = await falsePositiveFetcher(falsePositiveDbUrl);
+    if (txEvent.blockNumber % 300 == 0) {
+      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(falsePositiveListUrl);
 
       await Promise.all(
-        Object.values(falsePositiveDb).map(async (fpEntry: FalsePositiveInfo) => {
-          if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
-            (await labelFetcher(fpEntry["contractAddress"], "Rug pull contract")).forEach((label: Label) => {
-              findings.push(
-                createContractFalsePositiveFinding(
-                  fpEntry,
-                  label.metadata.chainId,
-                  label.metadata.contractAddress,
-                  label.metadata.deployerAddress,
-                  label.metadata.creationTime,
-                  label.metadata.contractName,
-                  label.metadata.tokenSymbol,
-                  label.metadata.exploitId,
-                  label.metadata.exploitName,
-                  label.metadata.exploitType
-                )
-              );
-            });
-            (await labelFetcher(fpEntry["deployerAddress"], "Rug pull contract deployer")).forEach((label: Label) => {
-              findings.push(
-                createDeployerFalsePositiveFinding(
-                  fpEntry,
-                  label.metadata.chainId,
-                  label.metadata.contractAddress,
-                  label.metadata.deployerAddress,
-                  label.metadata.creationTime,
-                  label.metadata.contractName,
-                  label.metadata.tokenSymbol,
-                  label.metadata.exploitId,
-                  label.metadata.exploitName,
-                  label.metadata.exploitType
-                )
-              );
-            });
-            alertedFalsePositives.push(fpEntry["contractName"]);
-          }
+        falsePositiveList.map(async (fpEntry: FalsePositiveEntry) => {
+          (await labelFetcher(fpEntry)).forEach((label: Label) => {
+            if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
+              findings.push(createFalsePositiveFinding(fpEntry, label.metadata));
+              alertedFalsePositives.push(fpEntry["contractName"]);
+            }
+          });
         })
       );
     }
 
-    const resultsToBeProcessed: RugPullResult[] = unalertedRugPullResults.splice(
+    const resultsToBeProcessed: ScamTokenResult[] = unalertedScamTokenResults.splice(
       0,
-      Math.min(unalertedRugPullResults.length, MAX_RUG_PULL_RESULTS_PER_BLOCK)
+      Math.min(unalertedScamTokenResults.length, MAX_SCAM_TOKEN_RESULTS_PER_BLOCK)
     );
-    findings.push(...resultsToBeProcessed.map(createRugPullFinding));
+    findings.push(...resultsToBeProcessed.map(createScamTokenFinding));
 
     return findings;
   };
 }
 
 export default {
-  // initialize: provideInitialize(ws),
-  // handleBlock: provideHandleBlock(FP_DB_URL, fetchFalsePositiveList, fetchLabels),
+  initialize: provideInitialize(createNewWebSocket),
+  handleTransaction: provideHandleTransaction(createNewWebSocket, FP_CSV_PATH, fetchLabels),
   provideInitialize,
-  provideHandleBlock,
+  provideHandleTransaction,
 };
