@@ -1,12 +1,9 @@
 import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
 import { MAX_SCAM_TOKEN_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
-import { ScamTokenResult, FalsePositiveEntry } from "./types";
+import { ScamTokenResult, FalsePositiveEntry, WebSocketInfo } from "./types";
 import { createScamTokenFinding, createFalsePositiveFinding } from "./findings";
 import { fetchWebSocketInfo, fetchLabels, fetchFalsePositiveList } from "./utils";
-
-const WEBSOCKET_URL: string = "";
-const API_KEY: string = "";
 
 let webSocket: WebSocket;
 // Bots are allocated 1GB of memory, so storing
@@ -17,8 +14,8 @@ const alertedFalsePositives: string[] = [];
 let isWebSocketConnected: boolean;
 
 async function createNewWebSocket(): Promise<WebSocket> {
-  // const webSocketUrl: string = await fetchWebSocketInfo();
-  return new WebSocket(WEBSOCKET_URL, { headers: { apiKey: API_KEY } });
+  const { WEBSOCKET_URL, WEBSOCKET_API_KEY }: WebSocketInfo = await fetchWebSocketInfo();
+  return new WebSocket(WEBSOCKET_URL, { headers: { apiKey: WEBSOCKET_API_KEY } });
 }
 
 async function establishNewWebSocketClient(ws: WebSocket) {

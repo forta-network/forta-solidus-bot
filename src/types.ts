@@ -21,3 +21,8 @@ export type FalsePositiveEntry = {
   chainId: string;
   comment: string;
 };
+
+export type WebSocketInfo = {
+  WEBSOCKET_URL: string;
+  WEBSOCKET_API_KEY: string;
+};

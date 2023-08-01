@@ -1,6 +1,6 @@
 import { Label, EntityType } from "forta-agent";
 import { createAddress } from "forta-agent-tools";
-import { ScamTokenResult } from "./types";
+import { ScamTokenResult, WebSocketInfo } from "./types";
 
 function createSingleScamTokenResult(identifier: number): ScamTokenResult {
   const ScamTokenResult: ScamTokenResult = {
@@ -87,15 +87,7 @@ export function createFetchedLabels(
   return labels;
 }
 
-/*
-metadata: {
-  ,
-  ,
-  ,
-  ,
-  ,
-  ,
-  ,
-  ,
-}
-*/
+export const mockWebSocketInfo: WebSocketInfo = {
+  WEBSOCKET_URL: "ws://localhost:1234",
+  WEBSOCKET_API_KEY: "abcxyz",
+};

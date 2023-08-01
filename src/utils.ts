@@ -4,20 +4,19 @@ import fs from "fs";
 import { parse, Parser } from "csv-parse";
 import { finished } from "stream/promises";
 import { BOT_ID, DATABASE_URL } from "./constants";
-import { FalsePositiveEntry } from "./types";
+import { FalsePositiveEntry, WebSocketInfo } from "./types";
 
-export async function fetchWebSocketInfo(): Promise<string> {
+export async function fetchWebSocketInfo(): Promise<WebSocketInfo> {
   const token = await fetchJwt({});
   const headers = { Authorization: `Bearer ${token}` };
   try {
     const response = await fetch(`${DATABASE_URL}`, { headers });
 
     if (response.ok) {
-      const data: string = await response.text();
-      return data;
+      const webSocketInfo: WebSocketInfo = await response.json();
+      return webSocketInfo;
     } else {
-      console.log(`database has no entry`);
-      return "";
+      return { WEBSOCKET_URL: "", WEBSOCKET_API_KEY: "" };
     }
   } catch (e) {
     console.log("Error in fetching data.");
