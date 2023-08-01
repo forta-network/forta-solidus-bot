@@ -40,6 +40,8 @@ The bot listens to the websocket stream of newly detected scam tokens from the [
   - Severity is always set to "Critical"
   - Type is always set to "Scam"
   - `uniqueKey`: A unique hash derived from `chain_id`, `address`, `deployer_addr`, `name`, `symbol`, and `created_at`
+  - `addresses`: A list containing the scam token contract address and contract deployer address
+  - `protocol`: The name of the token as required by ERC-20
   - `source`: The blockchain identifier for the token
   - Metadata:
     - `chain_id` - The blockchain identifier for the token

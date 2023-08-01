@@ -16,6 +16,8 @@ export function createScamTokenFinding(scamTokenResult: ScamTokenResult): Findin
     type: FindingType.Scam,
     uniqueKey,
     source: { chainSource: { chainId: Number(chain_id) } },
+    addresses: [address, deployer_addr],
+    protocol: name,
     metadata: {
       chain_id,
       deployer_addr,

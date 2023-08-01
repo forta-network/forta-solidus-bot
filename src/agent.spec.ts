@@ -48,6 +48,8 @@ function createScamTokenFinding(scamTokenResult: ScamTokenResult): Finding {
     type: FindingType.Scam,
     uniqueKey,
     source: { chainSource: { chainId: Number(chain_id) } },
+    addresses: [address, deployer_addr],
+    protocol: name,
     metadata: {
       chain_id,
       deployer_addr,
@@ -164,7 +166,6 @@ function createFalsePositiveFinding(
 
 describe("Scam Token Bot Test Suite", () => {
   let mockServer: WS;
-  let mockClient: WebSocket;
   const mockLabelFetcher = jest.fn();
   let handleTransaction: HandleTransaction;
   const mockTxEvent = new TestTransactionEvent().setBlock(10);
@@ -172,7 +173,7 @@ describe("Scam Token Bot Test Suite", () => {
 
   beforeEach(async () => {
     mockServer = new WS(mockWebSocketUrl, { jsonProtocol: true });
-    mockClient = await mockWebSocketCreator();
+    await mockWebSocketCreator();
     await mockServer.connected;
 
     const initialize: Initialize = provideInitialize(mockWebSocketCreator);
