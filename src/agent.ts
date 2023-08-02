@@ -78,7 +78,10 @@ export function provideHandleTransaction(
     const findings: Finding[] = [];
 
     if (txEvent.blockNumber % 300 == 0) {
-      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(falsePositiveListUrl, falsePositiveListLocalPath);
+      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(
+        falsePositiveListUrl,
+        falsePositiveListLocalPath
+      );
 
       await Promise.all(
         falsePositiveList.map(async (fpEntry: FalsePositiveEntry) => {

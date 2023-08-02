@@ -48,7 +48,10 @@ export async function fetchLabels(falsePositiveEntry: FalsePositiveEntry): Promi
 }
 
 // TODO: Implement logic to fetch from private repo
-export async function fetchFalsePositiveList(falsePositiveListUrl: string, localFalsePositivePath: string): Promise<FalsePositiveEntry[]> {
+export async function fetchFalsePositiveList(
+  falsePositiveListUrl: string,
+  localFalsePositivePath: string
+): Promise<FalsePositiveEntry[]> {
   const retryCount = 3;
   const records: FalsePositiveEntry[] = [];
 
@@ -67,7 +70,7 @@ export async function fetchFalsePositiveList(falsePositiveListUrl: string, local
 
       await finished(parser);
       break;
-    } catch(e) {
+    } catch (e) {
       try {
         parser = fs.createReadStream(localFalsePositivePath).pipe(parse({ columns: true }));
 

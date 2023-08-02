@@ -1,4 +1,4 @@
-# TokenSniffer Scam Token Detector
+# Token Sniffer Rug Pull Detector
 
 ## About the Developer
 

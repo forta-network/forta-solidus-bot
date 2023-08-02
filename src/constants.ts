@@ -1,4 +1,5 @@
-export const FP_CSV_GITHUB_URL: string = "https://raw.githubusercontent.com/forta-network/forta-solidus-bot/main/false.positives.csv";
+export const FP_CSV_GITHUB_URL: string =
+  "https://raw.githubusercontent.com/forta-network/forta-solidus-bot/main/false.positives.csv";
 
 export const FP_CSV_LOCAL_PATH: string = "./false.positives.csv";
 
