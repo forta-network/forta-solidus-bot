@@ -169,6 +169,7 @@ describe("Scam Token Bot Test Suite", () => {
   const mockLabelFetcher = jest.fn();
   let handleTransaction: HandleTransaction;
   const mockTxEvent = new TestTransactionEvent().setBlock(10);
+  const mockFpCsvGithubUrl: string = "mock/url/false.positives.csv";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
@@ -179,7 +180,7 @@ describe("Scam Token Bot Test Suite", () => {
     const initialize: Initialize = provideInitialize(mockWebSocketCreator);
     await initialize();
 
-    handleTransaction = provideHandleTransaction(mockWebSocketCreator, mockFpCsvPath, mockLabelFetcher);
+    handleTransaction = provideHandleTransaction(mockWebSocketCreator, mockFpCsvGithubUrl, mockFpCsvPath, mockLabelFetcher);
     const findings = await handleTransaction(mockTxEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);

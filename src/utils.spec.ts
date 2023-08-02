@@ -18,11 +18,12 @@ jest.mock("forta-agent", () => {
 });
 
 describe("Scam Token Bot Utils Test Suite", () => {
+  const mockFpCsvGithubUrl: string = "mock/url/false.positives.csv";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
   let mockFetch = jest.mocked(fetch, true);
 
   it("confirms fetchFalsePositiveList works as expected", async () => {
-    const fpEntries: FalsePositiveEntry[] = await fetchFalsePositiveList(mockFpCsvPath);
+    const fpEntries: FalsePositiveEntry[] = await fetchFalsePositiveList(mockFpCsvGithubUrl, mockFpCsvPath);
 
     expect(fpEntries).toStrictEqual([
       {

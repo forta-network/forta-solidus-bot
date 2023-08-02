@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import fs from "fs";
 import { parse, Parser } from "csv-parse";
 import { finished } from "stream/promises";
+import axios from "axios";
 import { BOT_ID, DATABASE_URL } from "./constants";
 import { FalsePositiveEntry, WebSocketInfo } from "./types";
 
@@ -46,18 +47,46 @@ export async function fetchLabels(falsePositiveEntry: FalsePositiveEntry): Promi
   return labels;
 }
 
-export async function fetchFalsePositiveList(csvPath: string): Promise<FalsePositiveEntry[]> {
+// TODO: Implement logic to fetch from private repo
+export async function fetchFalsePositiveList(falsePositiveListUrl: string, localFalsePositivePath: string): Promise<FalsePositiveEntry[]> {
+  const retryCount = 3;
   const records: FalsePositiveEntry[] = [];
 
-  const parser: Parser = fs.createReadStream(csvPath).pipe(parse({ columns: true }));
+  let parser: Parser;
 
-  parser.on("readable", function () {
-    let record: FalsePositiveEntry;
-    while ((record = parser.read()) !== null) {
-      records.push(record);
+  for (let i = 0; i <= retryCount; i++) {
+    try {
+      parser = parse((await axios.get(falsePositiveListUrl)).data, { columns: true });
+
+      parser.on("readable", function () {
+        let record: FalsePositiveEntry;
+        while ((record = parser.read()) !== null) {
+          records.push(record);
+        }
+      });
+
+      await finished(parser);
+      break;
+    } catch(e) {
+      try {
+        parser = fs.createReadStream(localFalsePositivePath).pipe(parse({ columns: true }));
+
+        parser.on("readable", function () {
+          let record: FalsePositiveEntry;
+          while ((record = parser.read()) !== null) {
+            records.push(record);
+          }
+        });
+
+        await finished(parser);
+        break;
+      } catch (e) {
+        if (i === retryCount) {
+          console.log("Error fetching false positive list.");
+        }
+      }
     }
-  });
+  }
 
-  await finished(parser);
   return records;
 }
