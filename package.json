@@ -1,7 +1,8 @@
 {
   "name": "tokensniffer-scam-token-detector",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Bot that alerts of scam token contracts indentified by TokenSniffer",
+  "displayName": "Token Sniffer Rug Pull Detector",
   "repository": "https://github.com/forta-network/forta-solidus-bot",
   "chainIds": [
     1
