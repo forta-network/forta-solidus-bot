@@ -15,7 +15,7 @@ export function createScamTokenFinding(scamTokenResult: ScamTokenResult): Findin
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
     uniqueKey,
-    source: { chainSource: { chainId: Number(chain_id) } },
+    source: { chains: [{ chainId: Number(chain_id) }] },
     addresses: [address, deployer_addr],
     protocol: name,
     metadata: {
@@ -96,7 +96,7 @@ export function createFalsePositiveFinding(
     severity: FindingSeverity.Info,
     type: FindingType.Info,
     uniqueKey,
-    source: { chainSource: { chainId: Number(chain_id) } },
+    source: { chains: [{ chainId: Number(chain_id) }] },
     metadata: {},
     labels: [
       Label.fromObject({
