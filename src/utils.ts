@@ -47,7 +47,6 @@ export async function fetchLabels(falsePositiveEntry: FalsePositiveEntry): Promi
   return labels;
 }
 
-// TODO: Implement logic to fetch from private repo
 export async function fetchFalsePositiveList(
   falsePositiveListUrl: string,
   localFalsePositivePath: string
