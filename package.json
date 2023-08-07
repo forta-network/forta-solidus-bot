@@ -1,9 +1,10 @@
 {
   "name": "tokensniffer-scam-token-detector",
   "displayName": "Token Sniffer Rug Pull Detector",
-  "version": "0.0.6",
-  "description": "Bot that alerts of rug pull contracts identified by TokenSniffer",
+  "version": "0.0.7",
+  "description": "Bot that alerts of rug pull contracts identified by Token Sniffer",
   "repository": "https://github.com/forta-network/forta-solidus-bot",
+  "longDescription": "The bot listens to the websocket stream of newly detected rug pulls from the Token Sniffer API. As new token smart contracts are deployed on-chain and/or source code is verified on the respective block explorer web site, Token Sniffer searches the contract source code against a database of known scam code patterns. For tokens without verified source code available a token may be alerted as a scam based on bytecode similarity to known scam contracts.",
   "chainIds": [
     1
   ],
