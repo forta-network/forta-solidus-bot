@@ -85,7 +85,8 @@ export function createFalsePositiveFinding(
     exploit_name,
     exploit_type,
   }: { [key: string]: string } = labelMetadata;
-  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry = falsePositiveEntry;
+  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry =
+    falsePositiveEntry;
   const resultString: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 

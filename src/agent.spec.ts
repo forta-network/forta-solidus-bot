@@ -109,7 +109,8 @@ function createFalsePositiveFinding(
 ): Finding {
   const { chain_id, address, deployer_addr, name, symbol, created_at }: ScamTokenResult = labelMetadata;
   const { id: exploit_id, name: exploit_name, types: exploit_type }: Exploit = labelExploit;
-  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry = falsePositiveEntry;
+  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry =
+    falsePositiveEntry;
   const resultString: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 
@@ -336,7 +337,7 @@ describe("Scam Token Bot Test Suite", () => {
     findings = await handleTransaction(mockTxEvent);
 
     const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
-    
+
     console.log(`findings: ${JSON.stringify(findings)}`);
 
     expect(findings).toStrictEqual([
