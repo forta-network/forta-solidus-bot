@@ -85,9 +85,8 @@ export function createFalsePositiveFinding(
     exploit_name,
     exploit_type,
   }: { [key: string]: string } = labelMetadata;
-  // Exclude `creationTime` from `resultString` to
-  // not create exact same `uniqueKey` as other Finding
-  const resultString: string = chain_id + address + deployer_addr + name + symbol;
+  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry = falsePositiveEntry;
+  const resultString: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 
   return Finding.fromObject({

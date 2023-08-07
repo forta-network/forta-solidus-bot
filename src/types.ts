@@ -18,6 +18,7 @@ export type FalsePositiveEntry = {
   contractName: string;
   contractAddress: string;
   deployerAddress: string;
+  creationTransaction: string,
   chainId: string;
   comment: string;
 };

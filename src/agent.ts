@@ -86,9 +86,11 @@ export function provideHandleTransaction(
       await Promise.all(
         falsePositiveList.map(async (fpEntry: FalsePositiveEntry) => {
           (await labelFetcher(fpEntry)).forEach((label: Label) => {
-            if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
+            const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry = fpEntry;
+            const fpEntryInfoConcat: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
+            if (!alertedFalsePositives.includes(fpEntryInfoConcat)) {
               findings.push(createFalsePositiveFinding(fpEntry, label.metadata));
-              alertedFalsePositives.push(fpEntry["contractName"]);
+              alertedFalsePositives.push(fpEntryInfoConcat);
             }
           });
         })

@@ -30,6 +30,7 @@ describe("Scam Token Bot Utils Test Suite", () => {
         contractName: "mockOne",
         contractAddress: "0x0000000000000000000000000000000000000010",
         deployerAddress: "0x0000000000000000000000000000000000000011",
+        creationTransaction: "0x0000000000000000000000000000000000000000000000000000000000000010",
         chainId: "1",
         comment: "Not scam token",
       },

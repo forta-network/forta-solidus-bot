@@ -109,9 +109,8 @@ function createFalsePositiveFinding(
 ): Finding {
   const { chain_id, address, deployer_addr, name, symbol, created_at }: ScamTokenResult = labelMetadata;
   const { id: exploit_id, name: exploit_name, types: exploit_type }: Exploit = labelExploit;
-  // Exclude `creationTime` from `resultString` to
-  // not create exact same `uniqueKey` as other Finding
-  const resultString: string = chain_id + address + deployer_addr + name + symbol;
+  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry = falsePositiveEntry;
+  const resultString: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 
   return Finding.fromObject({
@@ -303,6 +302,7 @@ describe("Scam Token Bot Test Suite", () => {
         contractAddress: createAddress("0x10"),
         chainId: "1",
         deployerAddress: createAddress("0x11"),
+        creationTransaction: "0x0000000000000000000000000000000000000000000000000000000000000010",
         comment: "Not scam token",
       })
       .mockReturnValue(
@@ -336,6 +336,8 @@ describe("Scam Token Bot Test Suite", () => {
     findings = await handleTransaction(mockTxEvent);
 
     const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
+    
+    console.log(`findings: ${JSON.stringify(findings)}`);
 
     expect(findings).toStrictEqual([
       createFalsePositiveFinding(mockFpValues[0], mockDataOneResult[0], mockDataOneResult[0]["exploits"][0]),
