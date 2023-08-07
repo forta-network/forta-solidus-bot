@@ -1,5 +1,5 @@
 import { fetchFalsePositiveList, fetchWebSocketInfo } from "./utils";
-import { FalsePositiveEntry, WebSocketInfo } from "./types";
+import { FalsePositiveEntry } from "./types";
 import { mockWebSocketInfo } from "./mock.data";
 import fetch, { Response } from "node-fetch";
 
