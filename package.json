@@ -10,7 +10,7 @@
   "chainSettings": {
     "1": {
       "shards": 1,
-      "target": 3
+      "target": 1
     }
   },
   "scripts": {
