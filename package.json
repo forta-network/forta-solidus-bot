@@ -1,10 +1,11 @@
 {
   "name": "tokensniffer-scam-token-detector",
   "displayName": "Token Sniffer Rug Pull Detector",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Detects tokens programmed to steal investor funds",
   "repository": "https://github.com/forta-network/forta-solidus-bot",
   "longDescription": "This bot is an extension of Token Sniffer, the first and most-used token security platform, powered by Solidus Labs. Token Sniffer’s smart contract scanner analyzes token contract code and functionality, testing for malicious patterns to assess whether or not a token is a hard rug pull.",
+  "promoUrl": "https://tokensniffer.com/",
   "chainIds": [
     1
   ],
