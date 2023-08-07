@@ -18,18 +18,19 @@ The bot listens to the websocket stream of newly detected rug pulls from the [To
 
 ## Supported Chains
 
-- Ethereum (1)
-- BSC (56)
-- Polygon (137)
-- Arbitrum (42161)
-- Optimism (10)
-- Fantom (250)
-- Avalanche (43114)
-- Cronos (25)
-- Gnosis (100)
-- KCC (321)
-- Oasis (42262)
-- Harmony (1666600000)
+- Ethereum
+- BNB Smart Chain (BSC)
+- Polygon
+- Arbitrum
+- Optimism
+- Fantom
+- Avalanche
+- Cronos
+- Gnosis
+- KCC
+- Oasis
+- Harmony
+- Base
 
 
 ## Alerts
