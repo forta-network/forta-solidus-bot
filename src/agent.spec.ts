@@ -47,7 +47,7 @@ function createScamTokenFinding(scamTokenResult: ScamTokenResult): Finding {
     severity: FindingSeverity.Critical,
     type: FindingType.Scam,
     uniqueKey,
-    source: { chainSource: { chainId: Number(chain_id) } },
+    source: { chains: [{ chainId: Number(chain_id) }] },
     addresses: [address, deployer_addr],
     protocol: name,
     metadata: {
@@ -109,9 +109,9 @@ function createFalsePositiveFinding(
 ): Finding {
   const { chain_id, address, deployer_addr, name, symbol, created_at }: ScamTokenResult = labelMetadata;
   const { id: exploit_id, name: exploit_name, types: exploit_type }: Exploit = labelExploit;
-  // Exclude `creationTime` from `resultString` to
-  // not create exact same `uniqueKey` as other Finding
-  const resultString: string = chain_id + address + deployer_addr + name + symbol;
+  const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry =
+    falsePositiveEntry;
+  const resultString: string = contractName + contractAddress + deployerAddress + creationTransaction + chainId;
   const uniqueKey: string = utils.keccak256(utils.toUtf8Bytes(resultString));
 
   return Finding.fromObject({
@@ -121,7 +121,7 @@ function createFalsePositiveFinding(
     severity: FindingSeverity.Info,
     type: FindingType.Info,
     uniqueKey,
-    source: { chainSource: { chainId: Number(chain_id) } },
+    source: { chains: [{ chainId: Number(chain_id) }] },
     metadata: {},
     labels: [
       Label.fromObject({
@@ -169,6 +169,7 @@ describe("Scam Token Bot Test Suite", () => {
   const mockLabelFetcher = jest.fn();
   let handleTransaction: HandleTransaction;
   const mockTxEvent = new TestTransactionEvent().setBlock(10);
+  const mockFpCsvGithubUrl: string = "mock/url/false.positives.csv";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
 
   beforeEach(async () => {
@@ -179,7 +180,12 @@ describe("Scam Token Bot Test Suite", () => {
     const initialize: Initialize = provideInitialize(mockWebSocketCreator);
     await initialize();
 
-    handleTransaction = provideHandleTransaction(mockWebSocketCreator, mockFpCsvPath, mockLabelFetcher);
+    handleTransaction = provideHandleTransaction(
+      mockWebSocketCreator,
+      mockFpCsvGithubUrl,
+      mockFpCsvPath,
+      mockLabelFetcher
+    );
     const findings = await handleTransaction(mockTxEvent);
     // No alerts since no data sent from server
     expect(findings).toStrictEqual([]);
@@ -297,6 +303,7 @@ describe("Scam Token Bot Test Suite", () => {
         contractAddress: createAddress("0x10"),
         chainId: "1",
         deployerAddress: createAddress("0x11"),
+        creationTransaction: "0x0000000000000000000000000000000000000000000000000000000000000010",
         comment: "Not scam token",
       })
       .mockReturnValue(
@@ -330,6 +337,8 @@ describe("Scam Token Bot Test Suite", () => {
     findings = await handleTransaction(mockTxEvent);
 
     const mockFpValues: FalsePositiveEntry[] = await mockFpFetcher(mockFpCsvPath);
+
+    console.log(`findings: ${JSON.stringify(findings)}`);
 
     expect(findings).toStrictEqual([
       createFalsePositiveFinding(mockFpValues[0], mockDataOneResult[0], mockDataOneResult[0]["exploits"][0]),

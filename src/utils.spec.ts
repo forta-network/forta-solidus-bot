@@ -1,5 +1,5 @@
 import { fetchFalsePositiveList, fetchWebSocketInfo } from "./utils";
-import { FalsePositiveEntry, WebSocketInfo } from "./types";
+import { FalsePositiveEntry } from "./types";
 import { mockWebSocketInfo } from "./mock.data";
 import fetch, { Response } from "node-fetch";
 
@@ -18,17 +18,19 @@ jest.mock("forta-agent", () => {
 });
 
 describe("Scam Token Bot Utils Test Suite", () => {
+  const mockFpCsvGithubUrl: string = "mock/url/false.positives.csv";
   const mockFpCsvPath: string = "./src/mock.fp.csv";
   let mockFetch = jest.mocked(fetch, true);
 
   it("confirms fetchFalsePositiveList works as expected", async () => {
-    const fpEntries: FalsePositiveEntry[] = await fetchFalsePositiveList(mockFpCsvPath);
+    const fpEntries: FalsePositiveEntry[] = await fetchFalsePositiveList(mockFpCsvGithubUrl, mockFpCsvPath);
 
     expect(fpEntries).toStrictEqual([
       {
         contractName: "mockOne",
         contractAddress: "0x0000000000000000000000000000000000000010",
         deployerAddress: "0x0000000000000000000000000000000000000011",
+        creationTransaction: "0x0000000000000000000000000000000000000000000000000000000000000010",
         chainId: "1",
         comment: "Not scam token",
       },

@@ -1,6 +1,6 @@
 import { Initialize, setPrivateFindings, HandleTransaction, TransactionEvent, Finding, Label } from "forta-agent";
 import WebSocket, { MessageEvent, ErrorEvent, CloseEvent } from "ws";
-import { MAX_SCAM_TOKEN_RESULTS_PER_BLOCK, FP_CSV_PATH } from "./constants";
+import { MAX_SCAM_TOKEN_RESULTS_PER_BLOCK, FP_CSV_GITHUB_URL, FP_CSV_LOCAL_PATH } from "./constants";
 import { ScamTokenResult, FalsePositiveEntry, WebSocketInfo } from "./types";
 import { createScamTokenFinding, createFalsePositiveFinding } from "./findings";
 import { fetchWebSocketInfo, fetchLabels, fetchFalsePositiveList } from "./utils";
@@ -66,6 +66,7 @@ export function provideInitialize(webSocketCreator: () => Promise<WebSocket>): I
 export function provideHandleTransaction(
   webSocketCreator: () => Promise<WebSocket>,
   falsePositiveListUrl: string,
+  falsePositiveListLocalPath: string,
   labelFetcher: (falsePositiveEntry: FalsePositiveEntry) => Promise<Label[]>
 ): HandleTransaction {
   return async (txEvent: TransactionEvent): Promise<Finding[]> => {
@@ -77,14 +78,21 @@ export function provideHandleTransaction(
     const findings: Finding[] = [];
 
     if (txEvent.blockNumber % 300 == 0) {
-      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(falsePositiveListUrl);
+      const falsePositiveList: FalsePositiveEntry[] = await fetchFalsePositiveList(
+        falsePositiveListUrl,
+        falsePositiveListLocalPath
+      );
 
       await Promise.all(
         falsePositiveList.map(async (fpEntry: FalsePositiveEntry) => {
           (await labelFetcher(fpEntry)).forEach((label: Label) => {
-            if (!alertedFalsePositives.includes(fpEntry["contractName"])) {
+            const { contractName, contractAddress, deployerAddress, creationTransaction, chainId }: FalsePositiveEntry =
+              fpEntry;
+            const fpEntryInfoConcat: string =
+              contractName + contractAddress + deployerAddress + creationTransaction + chainId;
+            if (!alertedFalsePositives.includes(fpEntryInfoConcat)) {
               findings.push(createFalsePositiveFinding(fpEntry, label.metadata));
-              alertedFalsePositives.push(fpEntry["contractName"]);
+              alertedFalsePositives.push(fpEntryInfoConcat);
             }
           });
         })
@@ -103,7 +111,7 @@ export function provideHandleTransaction(
 
 export default {
   initialize: provideInitialize(createNewWebSocket),
-  handleTransaction: provideHandleTransaction(createNewWebSocket, FP_CSV_PATH, fetchLabels),
+  handleTransaction: provideHandleTransaction(createNewWebSocket, FP_CSV_GITHUB_URL, FP_CSV_LOCAL_PATH, fetchLabels),
   provideInitialize,
   provideHandleTransaction,
 };

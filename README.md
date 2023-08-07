@@ -1,4 +1,4 @@
-# TokenSniffer Scam Token Detector
+# Token Sniffer Rug Pull Detector
 
 ## About the Developer
 
@@ -6,11 +6,11 @@ Solidus Labs is the category-definer for crypto-native market integrity solution
 
 ## Description
 
-This bot detects scam tokens by comparing the smart contract source code and bytecode against a database of thousands of known scam patterns using the [TokenSniffer API](https://tokensniffer.com/TokenSnifferAPI).  It supports the same scam detection functionality as the [TokenSniffer web site](https://tokensniffer.com).
+This bot detects rug pulls by comparing the smart contract source code and bytecode against a database of thousands of known scam patterns using the [Token Sniffer API](https://tokensniffer.com/TokenSnifferAPI).  It supports the same scam detection functionality as the [Token Sniffer web site](https://tokensniffer.com).
 
 ## How it Works
 
-The bot listens to the websocket stream of newly detected scam tokens from the [TokenSniffer API](https://tokensniffer.com/TokenSnifferAPI).  As new token smart contracts are deployed on-chain and/or source code is verified on the respective block explorer web site, TokenSniffer searches the contract source code against a database of known scam code patterns much in the same way a virus scanner searches executable programs for known virus code patterns.  For tokens without verified source code available a token may be alerted as a scam based on bytecode similarity to known scam contracts.  The bot emits an alert the contains information about the token and the type(s) of scam detected.
+The bot listens to the websocket stream of newly detected rug pulls from the [Token Sniffer API](https://tokensniffer.com/TokenSnifferAPI).  As new token smart contracts are deployed on-chain and/or source code is verified on the respective block explorer web site, Token Sniffer searches the contract source code against a database of known scam code patterns much in the same way a virus scanner searches executable programs for known virus code patterns.  For tokens without verified source code available a token may be alerted as a scam based on bytecode similarity to known scam contracts.  The bot emits an alert the contains information about the token and the type(s) of scam detected.
 
 ## Supported Standards
 
@@ -40,7 +40,7 @@ The bot listens to the websocket stream of newly detected scam tokens from the [
   - Severity is always set to "Critical"
   - Type is always set to "Scam"
   - `uniqueKey`: A unique hash derived from `chain_id`, `address`, `deployer_addr`, `name`, `symbol`, and `created_at`
-  - `addresses`: A list containing the scam token contract address and contract deployer address
+  - `addresses`: A list containing the rug pull contract address and contract deployer address
   - `protocol`: The name of the token as required by ERC-20
   - `source`: The blockchain identifier for the token
   - Metadata:
@@ -78,10 +78,10 @@ The bot listens to the websocket stream of newly detected scam tokens from the [
 
 ## Labels
 
-- Scam Token Contract
+- rug pull Contract
   - `entityType`: EntityType.Address
-  - `label`: "Scam token contract"
-  - `entity`: Scam token address
+  - `label`: "rug pull contract"
+  - `entity`: rug pull address
   - `confidence`: 0.99
   - `metadata`:
     - `chain_id` - The blockchain identifier for the token
@@ -94,10 +94,10 @@ The bot listens to the websocket stream of newly detected scam tokens from the [
     - `exploit_name` - A string description of the code rule that was triggered
     - `exploit_type` - A comma-separated list of strings describing the categories of the scam code detected.
 
-- Scam Token Contract Deployer
+- rug pull Contract Deployer
   - `entityType`: EntityType.Address
-  - `label`: "Scam token contract deployer"
-  - `entity`: Scam token deployer address
+  - `label`: "rug pull contract deployer"
+  - `entity`: rug pull deployer address
   - `confidence`: 0.99
   - `metadata`:
     - `chain_id` - The blockchain identifier for the token
